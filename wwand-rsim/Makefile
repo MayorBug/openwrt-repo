@@ -21,13 +21,13 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=wwand-rsim
-PKG_VERSION:=0.0.1_p25
+PKG_VERSION:=0.0.1_p27
 PKG_RELEASE:=1
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/ddimension/wwand-rsim.git
-PKG_SOURCE_VERSION:=d611c38b6e04448ba6755a080affe592e56cd074
-PKG_MIRROR_HASH:=a83570f272b8e9c2171213da478c386757fb691acafd46918992bddadaec7d46
+PKG_SOURCE_VERSION:=a0cc81ccb480c19bcf5808cc148b17a2f5d26ca4
+PKG_MIRROR_HASH:=0739016febc9cacb4297b6e16ade34784de90cb90b0320bde7c5f9c9f448125b
 
 PKG_LICENSE:=GPL-2.0-only
 PKG_LICENSE_FILES:=LICENSE
@@ -119,6 +119,10 @@ define Package/rsim-card
   # libusb-1.0: the Smartmouse USB backend (clock, mode and UART over USB)
   DEPENDS:=+libusb-1.0
   VARIANT:=nopcsc
+  # the provider apk and Kconfig prefer for `rsim-card` (a dependency of
+  # wwand-rsim): the plain one; rsim-card-pcsc provides the same name, and
+  # same-provide variants need a default (include/package-pack.mk)
+  DEFAULT_VARIANT:=1
 endef
 
 define Package/rsim-card-pcsc
