@@ -329,7 +329,15 @@ seiner DTS-Änderung im `fullbuild`-Leg. wwand kommt **signiert** aus gh-pages:
   gepusht wurde — GitHub startet dann wegen `paths-ignore` ggf. keinen Lauf.
 - **Image-Build starten:** `gh workflow run build-device-images.yml -R ddimension/openwrt-repo --ref main`
 - **Was ist live?** `curl -s https://ddimension.github.io/openwrt-repo/stable/openwrt-25.12/x86_64/.published`
-- **Runner-Status:** `gh api repos/ddimension/openwrt-repo/actions/runners`
+- **Runner-Status:** `scripts/ci-runners.sh` — je Runner der Job, den er gerade
+  fährt (Lauf, Leg, Laufzeit), dazu die Legs ohne Runner, die fertigen Legs und
+  die aktiven Läufe. Roh: `gh api repos/ddimension/openwrt-repo/actions/runners`.
+  Zeigt die Liste einen Runner als **busy ohne Job**, ist es die Karteileiche
+  eines verschwundenen Hosts: GitHub hält dessen Zuweisung bis zum Ablauf seiner
+  Frist (bis zu einer Stunde), solange verweigert das Deregistrieren mit
+  „currently running a job", und weder `gh run cancel` noch `force-cancel`
+  beschleunigen das — ein abgebrochener Lauf gilt erst als beendet, wenn der
+  Runner es quittiert.
 - **Workflows linten:** `docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint`
 - **Container-Image neu bauen:** `cd ~/projects/containers/<name> && ./mkimg`
 - **Neues Gerät:** upstream und unverändert → in die `zyxel`-`DEVICES` aufnehmen;
