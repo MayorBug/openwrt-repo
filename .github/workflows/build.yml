@@ -41,7 +41,13 @@ jobs:
     # minutes on the two runs before, then hit the limit mid-collectd twice and
     # left that tree stuck a version behind while every other arch published.
     # Nothing hung: the log shows it still compiling when the clock ran out.
-    timeout-minutes: 240
+    #
+    # 240 -> 300 with the runner fleet of 2026-09-27: the new CTs get 7 cores
+    # where n5/n6 had 10, and a fresh CT starts with empty dl/ccache volumes, so
+    # the first run on it builds everything from scratch. Legs that used to take
+    # 45-75 minutes were past 95 and still going. Five hours is head-room, not a
+    # target — a leg that actually hangs still dies, just later.
+    timeout-minutes: 300
     strategy:
       fail-fast: false
       matrix:
