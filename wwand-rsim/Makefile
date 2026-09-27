@@ -21,13 +21,13 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=wwand-rsim
-PKG_VERSION:=0.0.1_p33
+PKG_VERSION:=0.0.1_p37
 PKG_RELEASE:=1
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/ddimension/wwand-rsim.git
-PKG_SOURCE_VERSION:=47ced59254764b64074cf36ea13174d9bee898f9
-PKG_MIRROR_HASH:=a831b21abc5ebd5ff1bd6ca7e83973c937cd695d838f0abe29829df3fabfc05d
+PKG_SOURCE_VERSION:=8bb57e354b74eeac891e70e3fe8b9bc309737c23
+PKG_MIRROR_HASH:=e5ce2edd455f0417357f72d28229fa14b427b65b3536add67f9f94463f1ce09f
 
 PKG_LICENSE:=GPL-2.0-only
 PKG_LICENSE_FILES:=LICENSE
@@ -177,12 +177,33 @@ define Package/wwand-rsim/description
  reached over SSH (Phoenix/Smartmouse serial readers, the WB Electronics
  Smartmouse USB over libusb), in a phone paired over Bluetooth (SIM Access
  Profile), in a modem wwand does not manage (AT+CSIM), in another modem of
- this router, or in a modem of another wwand router (wwandctl rsim proxy,
- over SSH, restricted with rsim-card --serve). A lending modem detaches
+ this router, in a modem of another wwand router (over SSH, restricted with
+ rsim-card --serve; that router needs wwand-rsim-provider), or in an
+ osmo-remsim SIM bank (RSPRO). A lending modem detaches
  first and keeps its radio off; the lender's APN settings come along as a
  wwand_sim for the card. Configure per modem with `option rsim` (a
  wwand_simreader) or in LuCI. The modem firmware must have the service
  enabled: `wwandctl rsim [modem] enable --reset` (Quectel).
+endef
+
+define Package/wwand-rsim-provider
+  SECTION:=net
+  CATEGORY:=Network
+  SUBMENU:=WWAN
+  TITLE:=Lend this router's modem SIMs to other wwand routers
+  # the lending itself is the rsim plugin's, in the daemon; this is the
+  # relay another router runs here over SSH (wwandctl rsim proxy)
+  DEPENDS:=+wwand-rsim
+  VARIANT:=nopcsc
+endef
+
+define Package/wwand-rsim-provider/description
+ The provider side of wwand-rsim: `wwandctl rsim proxy`, which another
+ router's wwand-rsim runs here over SSH to borrow the card of one of this
+ router's modems (SIM Access or APDU by APDU, the modem's radio parked
+ meanwhile), and `wwandctl rsim proxy --list`, which a scan from there
+ shows. Without it this router lends its cards only to its own modems (SIM
+ sponsor), and another router reaches them only over an AT port.
 endef
 
 define Package/luci-app-wwand-rsim
@@ -214,6 +235,11 @@ define Package/wwand-rsim/install
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/ctl/rsim.uc $(1)$(UCDIR)/ctl/
 endef
 
+define Package/wwand-rsim-provider/install
+	$(INSTALL_DIR) $(1)$(UCDIR)/ctl
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/ctl/rsim_provider.uc $(1)$(UCDIR)/ctl/
+endef
+
 # named, not globbed (the rule luci-app-wwand follows)
 define Package/luci-app-wwand-rsim/install
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/wwand
@@ -229,4 +255,5 @@ endef
 $(eval $(call BuildPackage,rsim-card))
 $(eval $(call BuildPackage,rsim-card-pcsc))
 $(eval $(call BuildPackage,wwand-rsim))
+$(eval $(call BuildPackage,wwand-rsim-provider))
 $(eval $(call BuildPackage,luci-app-wwand-rsim))
