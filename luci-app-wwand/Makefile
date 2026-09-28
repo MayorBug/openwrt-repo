@@ -17,13 +17,13 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-wwand
-PKG_VERSION:=1.6.8_p8
+PKG_VERSION:=1.6.8_p13
 PKG_RELEASE:=1
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/ddimension/luci-app-wwand.git
-PKG_SOURCE_VERSION:=ee53e2130cc68616aabb0f8e9343d124ae5dfe63
-PKG_MIRROR_HASH:=4595e9fcd367bd4e8b5990bb28a03057bddcd0c3ad15fbb6eec8ce264ca9cc3b
+PKG_SOURCE_VERSION:=210f4be24144a605276c108c0abb56c55e29eef2
+PKG_MIRROR_HASH:=cc0b7e161d917a42ec488806ca66614730dd2777723d13ed8021f83984705e1d
 
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=
@@ -79,7 +79,7 @@ endef
 # statistics graph definition would have been installed on boxes with no
 # luci-app-statistics. A new resource has to be added here, and that is the
 # point of listing them.
-LUCI_WWAND_VIEW:=modems.js settings.js status.js
+LUCI_WWAND_VIEW:=modems.js settings.js sims.js status.js
 LUCI_WWAND_RES:=bands.js esim.js format.js graph.js logbox.js mccmnc.js \
 	modemopts.js modemsid.js netsel.js rpc.js signal.svg simlist.js
 
