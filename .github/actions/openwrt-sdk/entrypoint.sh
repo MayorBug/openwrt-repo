@@ -278,11 +278,23 @@ else
 	RET=0
 
 	# One compile attempt of a package at the given parallelism.
+	#
+	# NOT with CONFIG_AUTOREMOVE, which upstream gh-action-sdk sets. Each
+	# package here is its own make, and with AUTOREMOVE every make first
+	# runs `make -q` on each dependency and clean-builds any it cannot prove
+	# current (include/subdir.mk:52-60, rebuild_check), after emptying the
+	# build dirs of what it compiled (include/package.mk:307-312; OpenWrt
+	# 9ed087e0dd, 2026-09-11). package/kernel/linux fails that check, so every
+	# feed package that depends on a kmod rebuilt the whole kernel package
+	# from scratch: 11 clean-builds of 20-55 min each in one openwrt-25.12
+	# leg of run 36499002092, which ran 146-300 min per 25.12 leg and cut
+	# aarch64_generic off at the 300-min limit. Without it the dependency
+	# is built once per leg and every later make reuses it. The build dirs
+	# now stay until the container goes, which is what a job's disk is for.
 	pkg_compile() {
 		make \
 			BUILD_LOG="$BUILD_LOG" \
 			IGNORE_ERRORS="$IGNORE_ERRORS" \
-			CONFIG_AUTOREMOVE=y \
 			V="$V" \
 			-j "$1" \
 			"package/$PKG/compile"
