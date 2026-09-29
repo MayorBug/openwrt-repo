@@ -304,12 +304,42 @@ else
 			"package/$PKG/compile"
 	}
 
+	# ONE make for all of them first. A make per package re-examines every
+	# shared dependency each time, and on openwrt-25.12 something in that
+	# chain is rebuilt on every invocation: run 36573068015 spent 10-15
+	# silent minutes after `ucode compile` before each wwand-family package
+	# (snapshot: once, then seconds), 278 of its 300 allowed minutes in all.
+	# One invocation evaluates each dependency once. The per-package loop
+	# below stays as the fallback: it is what retries a package serially
+	# (the hostapd race) and names the one that really fails.
+	BUILD_PKGS=""
 	for PKG in $PACKAGES; do
 		if ! grep -m1 -qE "(^|/)$PKG$" enabled-package-subdirs.txt; then
 			echo "::warning file=$PKG::Skipping $PKG due to unsupported architecture"
 			continue
 		fi
+		BUILD_PKGS="$BUILD_PKGS $PKG"
+	done
 
+	ALL_DONE=0
+	if [ -n "$BUILD_PKGS" ]; then
+		group "compile all at once:$BUILD_PKGS"
+		# shellcheck disable=SC2046  # one target per package is the point
+		if make \
+			BUILD_LOG="$BUILD_LOG" \
+			IGNORE_ERRORS="$IGNORE_ERRORS" \
+			CONFIG_AUTOREMOVE= \
+			V="$V" \
+			-j "$NPROC" \
+			$(for P in $BUILD_PKGS; do printf 'package/%s/compile ' "$P"; done); then
+			ALL_DONE=1
+		else
+			echo "::warning::the combined compile failed, building package by package"
+		fi
+		endgroup
+	fi
+
+	[ "$ALL_DONE" = 1 ] || for PKG in $BUILD_PKGS; do
 		# Second attempt at -j1 before giving up. Reason: hostapd sets
 		# PKG_PARALLEL_VARIANTS (upstream b029d56e), but its variants DO share
 		# files outside their build directories -- which that feature forbids.
