@@ -47,7 +47,12 @@ jobs:
     # the first run on it builds everything from scratch. Legs that used to take
     # 45-75 minutes were past 95 and still going. Five hours is head-room, not a
     # target — a leg that actually hangs still dies, just later.
-    timeout-minutes: 300
+    #
+    # 300 -> 420: openwrt-25.12 legs now run 2.6-4.6 h, and 25.12/x86_64 hit 300
+    # still compiling (run 36922244803, 2026-10-02), leaving that tree a
+    # release behind while the other 15 published. The runners are self-hosted,
+    # so GitHub's 6 h cap for hosted runners does not apply.
+    timeout-minutes: 420
     strategy:
       fail-fast: false
       matrix:
