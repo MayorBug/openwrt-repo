@@ -136,6 +136,18 @@ jobs:
             target: ramips
             subtarget: mt7621
             devices: zyxel_nr7101
+          # Zyxel LTE3301-M209/Q222: existieren upstream NICHT — der Fork-Branch
+          # lte3301 bringt DTS, mt7620-Image-Rezepte, U-Boot- und jboot-Tool-
+          # Patches mit. Anderes Subtarget als der LTE3301-PLUS (mt7620 statt
+          # mt7621), Paket-Arch bleibt mipsel_24kc. Nur master: der Branch sitzt
+          # auf openwrt main, einen 25.12-Backport gibt es nicht.
+          - slug: lte3301
+            base: master
+            src_url: https://github.com/ddimension/openwrt.git
+            src_branch: lte3301
+            target: ramips
+            subtarget: mt7620
+            devices: zyxel_lte3301-m209 zyxel_lte3301-q222
     env:
       TARGET: ${{ matrix.target }}
       SUBTARGET: ${{ matrix.subtarget }}

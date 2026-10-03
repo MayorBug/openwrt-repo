@@ -44,9 +44,14 @@ fi
 # Download-Cache (OpenWrt nutzt $(TOPDIR)/dl)
 rm -rf dl && ln -s /dl dl
 
-# Feeds: wwand-Feed ergaenzen
+# Feeds: wwand-Feed ergaenzen. Eine vorhandene wwand-Zeile fliegt vorher raus —
+# ein Quell-Branch darf seine eigene mitbringen (der lte3301-Branch tut es, mit
+# der UNGEPINNTEN URL), und `grep -qF` auf unsere gepinnte Form wuerde sie nicht
+# erkennen: feeds.conf haette dann zweimal den Feed-Namen 'wwand', und welcher
+# Klon gewinnt, entscheidet scripts/feeds — der Pin waere nicht mehr garantiert.
 cp -f feeds.conf.default feeds.conf
-grep -qF "$WWAND_FEED" feeds.conf || echo "src-git wwand ${WWAND_FEED}" >> feeds.conf
+sed -i '/^src-[a-z]* *wwand[[:space:]]/d' feeds.conf
+echo "src-git wwand ${WWAND_FEED}" >> feeds.conf
 # Ein gepinnter Feed (<url>^<sha>) wird von scripts/feeds nach dem Klonen nie
 # mehr aktualisiert, und die Quelle merkt es sich VOR dem Klonen. Brach ein
 # frueherer Lauf zwischen clone und checkout ab (Netz, Abbruch), steht

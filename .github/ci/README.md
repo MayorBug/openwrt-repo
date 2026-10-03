@@ -15,8 +15,8 @@ Zwei Workflows:
   publiziert ihn nach `https://ddimension.github.io/openwrt-repo/<kanal>/<release>/<arch>/`;
   stable zusätzlich in den Alt-Pfad `<release>/<arch>/`.
 - **`build-device-images.yml`** — baut fertige **Firmware-Images** (chateau,
-  nbg7815, nr7101, lte3301-plus) mit wwand-Stack und `ddimension-feed`, immer
-  gegen den **stable**-Kanal.
+  nbg7815, nr7101, LTE3301-M209/Q222, lte3301-plus) mit wwand-Stack und
+  `ddimension-feed`, immer gegen den **stable**-Kanal.
 
 Beide schreiben gh-pages **ausschließlich** über `.github/ci/publish-pages.sh`.
 
@@ -225,7 +225,7 @@ Voll-Builds pinnen ihn, der zyxel-Leg wartet auf seinen `.published`-Stempel,
 
 **Ort der Images:**
 - dauerhaft auf gh-pages unter `images/<gruppe>/<base>/`
-  (`<gruppe>` = chateau | nbg7815 | nr7101 | zyxel, `<base>` = OpenWrt-Basis master |
+  (`<gruppe>` = chateau | nbg7815 | nr7101 | lte3301 | zyxel, `<base>` = OpenWrt-Basis master |
   stable), flach, ohne Paket-Repo, mit `.published`;
 - als **Run-Artefakte** `images-<gruppe>-<base>` (Retention **30 Tage**,
   `if-no-files-found: warn`). Holen:
@@ -240,7 +240,7 @@ Die Namen bleiben, weil Volumes (`owrt-src-<slug>-<base>`, `owrt-ib-<base>`) und
 Artefakte daran hängen — ein Rename kostet den chateau-Leg sein warmes `build_dir`
 (~12 h Kaltbau).
 
-### Voll-Buildroot (chateau, nbg7815, nr7101)
+### Voll-Buildroot (chateau, nbg7815, nr7101, lte3301)
 
 Kein ImageBuilder möglich: die Geräte gibt es **nur in PR-Branches** des Forks
 `ddimension/openwrt` (chateau zusätzlich Kernel-Patch `routerbootpart.c`, eigenes
@@ -267,6 +267,16 @@ DTS, LZMA-Loader). Quellen:
   verschiebt upstream den Kontext, scheitert der Leg laut — dann Patch neu
   erzeugen (er liegt in keinem Branch). Das Gerät lief vorher im zyxel-Leg
   (ImageBuilder), der keinen eigenen Kernel bauen kann.
+- **lte3301 (nur master):** Fork-Branch `lte3301` für **LTE3301-M209/Q222** —
+  Geräte, die es upstream **nicht** gibt: der Branch bringt DTS
+  (`mt7620n_zyxel_lte3301-{m209,q222}.dts`), die mt7620-Image-Rezepte, einen
+  U-Boot-Patch und jboot-tools mit. Target ramips/**mt7620** (nicht mt7621 wie
+  der LTE3301-**PLUS**, der weiter im zyxel-ImageBuilder-Leg läuft); Paket-Arch
+  bleibt `mipsel_24kc`. Nur master, der Branch sitzt auf openwrt main.
+  Besonderheit: dieser Branch trägt in `feeds.conf.default` eine **eigene**
+  wwand-Zeile. `build-images.sh` entfernt vorhandene wwand-Feeds, bevor es den
+  gepinnten anhängt — sonst stünde der Feed zweimal drin und welcher Klon
+  gewinnt, entschiede `scripts/feeds` statt wir.
 - **wwand-Feed:** `src-git` dieses Repos, gepinnt auf den Feed-Commit des
   Laufs (`…openwrt-repo.git^<sha>`). `scripts/feeds` merkt sich die Quelle
   (`feeds/wwand.tmp/location`) und klont bei Änderung neu — aber es schreibt
