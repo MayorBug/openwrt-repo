@@ -17,6 +17,7 @@ ddimension-feed
 homesync
 luacurl
 lua-mosquitto
+nsca-ng
 qfirehose
 qflash
 qlog

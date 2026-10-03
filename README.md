@@ -27,6 +27,7 @@ repositories, pinned to a commit.
 | `snapcast-mptcp` | Snapcast with Multipath-TCP | `snapserver-mptcp`, `snapclient-mptcp` | [ddimension/snapcast](https://github.com/ddimension/snapcast) | ✓ |
 | `luacurl` | Lua binding for libcurl | same | upstream [Lua-cURL/Lua-cURLv3](https://github.com/Lua-cURL/Lua-cURLv3) | ✓ |
 | `lua-mosquitto` | Lua binding for libmosquitto | same | upstream [flukso/lua-mosquitto](https://github.com/flukso/lua-mosquitto) | ✓ |
+| `nsca-ng` | NSCA-ng client (`send_nsca`): passive check results to Nagios/Icinga over TLS-PSK; what `wwand-apntest` reports through | same | upstream [weiss/nsca-ng](https://github.com/weiss/nsca-ng) | ✓ |
 | `qfirehose` | Quectel QFirehose V1.4.21, firmware flasher | same | bundled source zip | ✓ |
 | `qflash` | Quectel QFlash 2.0, legacy firmware flasher | same | bundled source tarball | ✓ |
 | `qlog` | Quectel QLog V1.5.8, diagnostic log capture with Quectel's filter profiles | same | bundled source zip | ✓ |
