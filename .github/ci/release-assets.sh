@@ -74,7 +74,7 @@ release_id() {
 	# captured first, not piped: grep -m1 closes the pipe early and curl then
 	# dies of EPIPE, which under pipefail would fail the whole call
 	j="$(api "$API/releases/tags/$TAG" 2>/dev/null)" || return 1
-	printf '%s' "$j" | grep -m1 -oE '"id": *[0-9]+' | grep -oE '[0-9]+'
+	grep -m1 -oE '"id": *[0-9]+' <<<"$j" | grep -oE '[0-9]+'
 }
 
 rid="$(release_id || true)"
@@ -99,13 +99,19 @@ upload() {
 	esac
 	# In the pretty-printed asset list "id" comes before "name" in each
 	# object, so remember the last id seen and print it when the name matches.
-	old="$(printf '%s' "$assets_json" | awk -v want="$name" '
+	# again a here-string: the awk program exits at the first match, and a
+	# printf writing into that pipe would fail with EPIPE under pipefail —
+	# which under set -e ends the whole script, silently, mid-upload.
+	old="$(awk -v want="$name" '
 		match($0, /"id": *[0-9]+/) { id = substr($0, RSTART + 6, RLENGTH - 6); gsub(/[^0-9]/, "", id) }
 		match($0, /"name": *"[^"]*"/) {
 			n = substr($0, RSTART + 9, RLENGTH - 10)
 			if (n == want && id != "") { print id; exit }
-		}')"
-	[ -n "$old" ] && api -X DELETE "$API/releases/assets/$old" >/dev/null
+		}' <<<"$assets_json")"
+	if [ -n "$old" ]; then
+		api -X DELETE "$API/releases/assets/$old" >/dev/null ||
+			echo "release-assets: could not remove the old $name, the upload will say so" >&2
+	fi
 	api -X POST -H "Content-Type: $type" --data-binary "@$file" \
 		"$UPLOAD/releases/$rid/assets?name=$name" >/dev/null || die "upload of $name failed"
 	echo "  $name ($(LC_ALL=C numfmt --to=iec --suffix=B "$(stat -c%s "$file")"))"
