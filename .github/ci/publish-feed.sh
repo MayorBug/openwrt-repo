@@ -53,6 +53,13 @@ DIR="" CHANNEL="" SHA="" RUN="" TAG="" FORCE=0
 case "${1:-}" in
 --dir)
 	while [ $# -gt 0 ]; do
+		# --force first: it takes no argument, so the arity check below would
+		# reject it as the last word on the line.
+		if [ "$1" = --force ]; then
+			FORCE=1
+			shift
+			continue
+		fi
 		[ $# -ge 2 ] || die "$1 needs an argument"
 		case "$1" in
 		--dir) DIR="$2" ;;
