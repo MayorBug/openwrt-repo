@@ -14,7 +14,16 @@ homesync, the wpad variants, nsca-ng, usb-relay-hid, luacurl, lua-mosquitto,
 libubus-lua-async, heatingrod) are in **ddimension/openwrt-addon-feed**, with
 their own runners, their own gh-pages site and the same signing key. Nothing
 here depends on them. `ddimension-feed` installs one `.list` per feed, so a
-device follows both. A non-site-specific change to `publish-pages.sh` or the
+device follows both.
+
+**Release order, until the add-on feed has its first release tag:**
+`ddimension-feed` r4 names `…/openwrt-addon-feed/<channel>/<release>/<arch>/`
+for the channel it was built in. That tree has to exist, or `apk update` on
+the device errors with a 404 for it. So: add-on feed first (main build, then a
+release tag for its stable channel), and only afterwards may r4 reach THIS
+feed's stable — i.e. `scripts/stable-take.sh ddimension-feed` and
+`scripts/release-stable.sh` wait for that. On main it is harmless as soon as
+the add-on feed has published main once. A non-site-specific change to `publish-pages.sh` or the
 release scripts belongs in both repos — say so in the commit message.
 
 ## Branches are channels — two independent lines

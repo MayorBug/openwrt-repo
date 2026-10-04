@@ -15,7 +15,17 @@ Our other packages — AP management (`apman`), multiroom audio
 since 2026-10-04 and are published at
 [ddimension.github.io/openwrt-addon-feed](https://ddimension.github.io/openwrt-addon-feed/).
 Both feeds are independent and signed with the same key; `ddimension-feed`
-installs a `.list` for each. The split exists for build time: a one-line change
+installs a `.list` for each. One package here reaches across: `wwand-apntest`
+reports its results with `send_nsca`, which is `nsca-ng` — in the add-on feed.
+A box that runs APN tests therefore needs both feeds, which r4 of
+`ddimension-feed` sets up by itself.
+
+One order has to be kept while the add-on feed is young: r4 points at
+`…/openwrt-addon-feed/<channel>/<release>/<arch>/`, so **that tree must exist
+before r4 reaches a device**, or `apk update` reports a 404 for it. The add-on
+feed publishes its stable channel only from a release tag, so a release of
+this feed that carries r4 comes *after* the add-on feed's first release. On
+the main channel it is enough that the add-on feed has built main once. The split exists for build time: a one-line change
 in `wwand` used to rebuild boost, hostapd and collectd too, because the feed
 build throws its SDK tree away on every run.
 
