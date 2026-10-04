@@ -50,13 +50,13 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=wwand
-PKG_VERSION:=1.7.0_pre8
+PKG_VERSION:=1.7.0_pre11
 PKG_RELEASE:=1
 
 PKG_SOURCE_PROTO:=git
-PKG_SOURCE_URL:=https://github.com/ddimension/wwand.git
-PKG_SOURCE_VERSION:=b61dca48c99496ce5472e1906f935230f41bcb69
-PKG_MIRROR_HASH:=5c7e8d0f2c419d7bb4b293fd745cd219a7ea4a2e7c320ad7b90ee60b49b3e1ad
+PKG_SOURCE_URL:=https://github.com/MayorBug/wwand.git
+PKG_SOURCE_VERSION:=9468504b09dadaed9f15d87bd3ca60883bb9d5f2
+PKG_MIRROR_HASH:=05746c1506755cdb3eb0efc6d43f40f11f33f26f3c36d686e829a93a3f49ca90
 
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=
@@ -269,6 +269,7 @@ define Package/wwand/install
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/files/wwand-proto.sh $(1)/lib/netifd/proto/wwand.sh
 	$(INSTALL_DIR) $(1)/usr/libexec/wwand
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/files/wwand-migrate $(1)/usr/libexec/wwand/migrate
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/files/wwand-startup $(1)/usr/libexec/wwand/startup
 	# migration is user-triggered (LuCI modem list / the migrate CLI); the
 	# Config migration is ALWAYS user-triggered: nothing is installed under
 	# /etc/uci-defaults, so installing or upgrading wwand never rewrites an
