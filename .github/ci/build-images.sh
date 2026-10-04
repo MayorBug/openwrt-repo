@@ -187,6 +187,26 @@ stall_diagnose() {
 	done
 }
 
+# Die ganze Prozessgruppe einer Stufe abraeumen. Die Gruppen-Id ist die PID der
+# Subshell (setsid in run_watched); ein negatives Signalziel trifft alle darin.
+# Danach die Reste, die sich abgekoppelt haben: fakeroots faked haengt an
+# keinem make-Kind mehr, sobald sein Elternteil weg ist.
+stage_kill() {
+	local pid="$1"
+	kill -9 -- "-$pid" 2>/dev/null || true
+	kill -9 "$pid" 2>/dev/null || true
+	# procps ist im Container nicht garantiert -> ueber /proc gehen.
+	for d in /proc/[0-9]*; do
+		[ -r "$d/cmdline" ] || continue
+		case "$(tr '\0' ' ' <"$d/cmdline" 2>/dev/null)" in
+		*fakeroot*apk\ mkpkg* | *bin/faked*) kill -9 "${d#/proc/}" 2>/dev/null || true ;;
+		esac
+	done
+	# kurz warten, bis der Kernel die Gruppe wirklich abgeraeumt hat
+	kill -0 "$pid" 2>/dev/null && sleep 3
+	true
+}
+
 # run_watched <tag> <kommando...>: fuehrt das Kommando aus, streamt seine
 # Ausgabe und bricht ab, wenn STALL_LIMIT lang nichts mehr dazukommt.
 run_watched() {
@@ -194,7 +214,13 @@ run_watched() {
 	local log="/tmp/stage-${tag}.log" rcfile="/tmp/stage-${tag}.rc" mk tl age rc
 
 	rm -f "$rcfile"; : > "$log"
-	( "$@" >>"$log" 2>&1; echo "$?" > "$rcfile" ) &
+	# setsid: die Stufe bekommt eine eigene Session, ihre PID ist damit auch
+	# die Prozessgruppen-Id. Nur so laesst sich beim Abbruch der GANZE Baum
+	# killen (make -> bash -> perl -> make -> fakeroot -> faked). `pkill -P`
+	# erwischt nur direkte Kinder, und der Rest lief danach munter weiter: im
+	# nr7101-stable-Leg (Lauf 37214945447) haengte der zweite, serielle
+	# Versuch an genau denselben fakeroot-Prozessen des ersten.
+	( setsid "$@" >>"$log" 2>&1; echo "$?" > "$rcfile" ) &
 	mk=$!
 	tail -f -n +1 "$log" & tl=$!
 
@@ -220,8 +246,7 @@ run_watched() {
 		if true; then
 			echo "::error::Stufe '${tag}' haengt: seit ${age}s keine Ausgabe (Limit ${STALL_LIMIT}s)"
 			stall_diagnose || true
-			pkill -9 -P "$mk" 2>/dev/null || true
-			kill -9 "$mk" 2>/dev/null || true
+			stage_kill "$mk"
 			echo 124 > "$rcfile"
 			break
 		fi
@@ -270,11 +295,9 @@ rc=0
 run_watched world make -j"${JOBS}" BUILD_LOG=1 || rc=$?
 if [ "$rc" = 124 ]; then
 	echo "::warning file=${SLUG:-image}::Stufe 'world' hing (rc=124), einmal serieller Versuch mit -j1"
-	# Reste des abgebrochenen Laufs: der Wachhund killt die make-Kinder, die
-	# fakeroot-Daemons haengen aber an keinem von ihnen.
-	pkill -9 -f 'apk mkpkg' 2>/dev/null || true
-	pkill -9 -x faked 2>/dev/null || true
-	sleep 2
+	# stage_kill hat die Gruppe schon abgeraeumt; kurz Luft lassen, damit der
+	# Kernel die Sockets der faked-Prozesse wirklich schliesst.
+	sleep 5
 	rc=0
 	run_watched world-j1 make -j1 BUILD_LOG=1 || rc=$?
 fi
