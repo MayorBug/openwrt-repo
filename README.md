@@ -31,7 +31,7 @@ build throws its SDK tree away on every run.
 | `wwand-ipa` | eSIM fleet management: the router as the SGP.32 IoT Profile Assistant of an eIM, as a wwand plugin, plus its LuCI page | `wwand-ipa`, `luci-app-wwand-ipa` | [ddimension/wwand-ipa](https://github.com/ddimension/wwand-ipa) | ✓ |
 | `wwand-ipad` | the assistant `wwand-ipa` drives: ipad, an SGP.32 v1.3 IPA (IoT eUICC, or an SGP.22 card through an emulation signed with a device key) that reaches the card through lpac's stdio APDU protocol so wwand relays it over the modem's own channel; mbedTLS linked in statically | same | [ddimension/ipad](https://github.com/ddimension/ipad) | ✓ |
 | `wwand-rsim` | remote SIM for wwand (QMI UIM Remote): a modem runs on a card that is not in its own slot — in a reader on the router or on a SIM host over SSH (Smartmouse/Phoenix, PC/SC), in a phone over Bluetooth SAP, in a modem wwand does not manage (AT+CSIM), in another modem of the router (SIM sponsor), in a modem of another wwand router, or in an osmo-remsim SIM bank (RSPRO); `wwandctl rsim` and a LuCI page. `rsim-card` is the card-side helper alone, for a SIM host; `wwand-rsim-provider` lets this router's modem cards be borrowed by other routers | `wwand-rsim`, `wwand-rsim-provider`, `rsim-card`, `rsim-card-pcsc`, `luci-app-wwand-rsim` | [ddimension/wwand-rsim](https://github.com/ddimension/wwand-rsim) | ✓ |
-| `ddimension-feed` | this feed's address and signing key, see [Set up a device](#set-up-a-device) | same | local (`files/`) | ✓ |
+| `ddimension-feed` | both feeds' addresses and the signing key, see [Set up a device](#set-up-a-device) | same | local (`files/`) | ✓ |
 | `qfirehose` | Quectel QFirehose V1.4.21, firmware flasher | same | bundled source zip | ✓ |
 | `qflash` | Quectel QFlash 2.0, legacy firmware flasher | same | bundled source tarball | ✓ |
 | `qlog` | Quectel QLog V1.5.8, diagnostic log capture with Quectel's filter profiles | same | bundled source zip | ✓ |
@@ -90,11 +90,12 @@ install -m755 rsim-card /usr/local/bin/rsim-card
 
 ### Set up a device
 
-The feed's address and key are themselves a package, `ddimension-feed`.
+The feeds' addresses and key are themselves a package, `ddimension-feed`.
 Install it once, **by name**, from the tree matching the channel, the
-installed release and the architecture, and the device follows this feed from
-then on — including any later change to the address or the key, which arrives
-as an ordinary upgrade rather than as a note somebody has to act on.
+installed release and the architecture, and the device follows **both** feeds
+from then on — this one and the add-on feed — including any later change to an
+address or to the key, which arrives as an ordinary upgrade rather than as a
+note somebody has to act on.
 
 ```
 apk --allow-untrusted \
@@ -123,17 +124,19 @@ A package installed from a file is recorded in `/etc/apk/world` pinned to that
 file's checksum (`ddimension-feed><Q1…>`), and a plain `apk upgrade` never
 upgrades a pinned package; the last line replaces the pin with the plain name.
 
-It installs two files, neither of them a conffile:
+It installs three files, none of them a conffile:
 
 | | |
 |---|---|
-| `/etc/apk/keys/ddimension.pem` | the public half the indexes are signed with |
-| `/etc/apk/repositories.d/ddimension.list` | the tree for this channel, release and architecture |
+| `/etc/apk/keys/ddimension.pem` | the public half both feeds' indexes are signed with |
+| `/etc/apk/repositories.d/ddimension.list` | this feed's tree for the channel, release and architecture |
+| `/etc/apk/repositories.d/ddimension-addon.list` | the add-on feed's tree, same channel, release and architecture |
 
 Not conffiles on purpose — a feed address that an update cannot correct is the
-problem the package exists to avoid. To follow another feed as well, add a
-second file in `/etc/apk/repositories.d`; apk reads all of them. Do not edit
-this one, it is replaced on upgrade.
+problem the package exists to avoid. To follow a further feed, add another file
+in `/etc/apk/repositories.d`; apk reads all of them. Do not edit ours, they are
+replaced on upgrade. (Up to r3 there was only the first `.list`; r4 added the
+second when the add-on packages moved to their own repository.)
 
 The package is built per channel, release and architecture, because the URL it
 installs names all three. After upgrading a device to a new OpenWrt release,
@@ -150,6 +153,9 @@ follow the stable channel from the first boot.
 wget -O /etc/apk/keys/ddimension.pem https://ddimension.github.io/openwrt-repo/keys/ddimension.pem
 echo "https://ddimension.github.io/openwrt-repo/stable/snapshot/aarch64_cortex-a53/packages.adb" \
   > /etc/apk/repositories.d/ddimension.list
+# only if the device also needs add-on packages (apman, snapclient-mptcp, wpad-*, …)
+echo "https://ddimension.github.io/openwrt-addon-feed/stable/snapshot/aarch64_cortex-a53/packages.adb" \
+  > /etc/apk/repositories.d/ddimension-addon.list
 apk update
 apk add wwand luci-app-wwand
 ```
@@ -291,11 +297,14 @@ Add to `feeds.conf` (or `feeds.conf.default`) of an OpenWrt buildroot or SDK:
 
 ```
 src-git wwand https://github.com/ddimension/openwrt-repo.git;stable
+src-git ddaddon https://github.com/ddimension/openwrt-addon-feed.git;stable
 ```
 
-`;stable` follows the stable branch (releases plus any preparation not yet
-released), `;main` development, and `^<commit>` pins one commit — the commit of
-a release tag for exactly what devices get. Then:
+The second line is only needed for add-on packages; the two feed **names** must
+differ, or `scripts/feeds` decides which clone wins. `;stable` follows the
+stable branch (releases plus any preparation not yet released), `;main`
+development, and `^<commit>` pins one commit — the commit of a release tag for
+exactly what devices get. Then:
 
 ```
 ./scripts/feeds update wwand
