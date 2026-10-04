@@ -374,8 +374,10 @@ jobs:
             [ -d "$art" ] || continue
             rest="$(basename "$art")"; rest="${rest#images-}"
             group="${rest%-*}"; base="${rest##*-}"      # images-zyxel-master -> zyxel / master
-            # the artifact holds a single target dir (qualcommax-ipq60xx /
-            # ramips-mt7621-<base>): flatten it and drop the per-image package repo
+            # the artifact holds a single target dir, named <target>-<subtarget>
+            # by build-images.sh (qualcommax-ipq60xx, ramips-mt7620, …) — for the
+            # ImageBuilder legs <target>-<subtarget>-<base>: flatten it and drop
+            # the per-image package repo
             sub="$(find "$art" -mindepth 1 -maxdepth 1 -type d | head -1)"
             stage="staging/$group/$base"
             mkdir -p "$stage"

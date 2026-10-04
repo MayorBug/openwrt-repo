@@ -50,7 +50,7 @@ rm -rf dl && ln -s /dl dl
 # erkennen: feeds.conf haette dann zweimal den Feed-Namen 'wwand', und welcher
 # Klon gewinnt, entscheidet scripts/feeds — der Pin waere nicht mehr garantiert.
 cp -f feeds.conf.default feeds.conf
-sed -i '/^src-[a-z]* *wwand[[:space:]]/d' feeds.conf
+sed -i '/^src-[a-z-]\{1,\}[[:space:]]\{1,\}wwand[[:space:]]/d' feeds.conf
 echo "src-git wwand ${WWAND_FEED}" >> feeds.conf
 # Ein gepinnter Feed (<url>^<sha>) wird von scripts/feeds nach dem Klonen nie
 # mehr aktualisiert, und die Quelle merkt es sich VOR dem Klonen. Brach ein
@@ -72,13 +72,33 @@ echo "::group::feeds"
 ./scripts/feeds install -a
 echo "::endgroup::"
 
+# Ein Geraet oder mehrere? Mehrere gehen NICHT ueber die Profil-Symbole:
+# target-metadata.pl legt alle TARGET_<conf>_DEVICE_* in EINE kconfig-choice
+# ("Target Profile"), ein zweites =y ueberschreibt dort nur das erste
+# (confdata.c: "changes choice state") -- defconfig behielte das letzte Geraet
+# und die verify-Schleife unten scheiterte am ersten. Fuer mehrere Geraete ist
+# TARGET_MULTI_PROFILE mit den Menue-Symbolen TARGET_DEVICE_<conf>_DEVICE_<name>
+# vorgesehen; die defaulten nur unter TARGET_ALL_PROFILES auf y
+# (metadata.pm: `default => "y if TARGET_ALL_PROFILES"`), es kommt also kein
+# weiteres Geraet des Subtargets dazu. Ein-Geraet-Legs behalten die alte Form,
+# damit ihr warmer Baum nicht wegen eines Config-Wechsels neu baut.
+ndev=0
+for d in $DEVICES; do ndev=$((ndev + 1)); done
+
 # .config seeden: Target/Subtarget/Devices + kompletter wwand-Stack + ccache
 {
 	echo "CONFIG_TARGET_${TARGET}=y"
 	echo "CONFIG_TARGET_${TARGET}_${SUBTARGET}=y"
-	for d in $DEVICES; do
-		echo "CONFIG_TARGET_${TARGET}_${SUBTARGET}_DEVICE_${d}=y"
-	done
+	if [ "$ndev" -gt 1 ]; then
+		echo "CONFIG_TARGET_MULTI_PROFILE=y"
+		for d in $DEVICES; do
+			echo "CONFIG_TARGET_DEVICE_${TARGET}_${SUBTARGET}_DEVICE_${d}=y"
+		done
+	else
+		for d in $DEVICES; do
+			echo "CONFIG_TARGET_${TARGET}_${SUBTARGET}_DEVICE_${d}=y"
+		done
+	fi
 	cat /ci/.github/ci/config.wwand
 	# Optionaler Zusatz je Leg: .github/ci/config.<slug> (z.B. config.chateau
 	# mit kmod-usb-serial-ftdi). Fehlt die Datei, bleibt es beim gemeinsamen
@@ -96,10 +116,22 @@ make defconfig
 
 echo "::group::verify device selection"
 for d in $DEVICES; do
-	grep -q "CONFIG_TARGET_${TARGET}_${SUBTARGET}_DEVICE_${d}=y" .config \
-		|| { echo "FEHLER: Geraet ${d} nach defconfig nicht selektiert"; exit 3; }
+	if [ "$ndev" -gt 1 ]; then
+		sym="CONFIG_TARGET_DEVICE_${TARGET}_${SUBTARGET}_DEVICE_${d}=y"
+	else
+		sym="CONFIG_TARGET_${TARGET}_${SUBTARGET}_DEVICE_${d}=y"
+	fi
+	grep -q "^${sym}$" .config \
+		|| { echo "FEHLER: Geraet ${d} nach defconfig nicht selektiert (${sym})"; exit 3; }
 done
 grep -q '^CONFIG_PACKAGE_wwand=y' .config || { echo "FEHLER: wwand nicht selektiert (Feed ok?)"; exit 3; }
+# CONFIG_TESTING_KERNEL haengt an HAS_TESTING_KERNEL, das nur gesetzt ist, wenn
+# das Target ein KERNEL_TESTING_PATCHVER hat (include/target.mk). Fehlt das,
+# wirft defconfig das Symbol still weg und der Leg baut den Default-Kernel --
+# der Lauf soll das nicht trotzdem als Testing-Kernel ausgeben.
+if [ -n "${TESTING_KERNEL:-}" ] && ! grep -q '^CONFIG_TESTING_KERNEL=y' .config; then
+	echo "::warning::${TARGET}/${SUBTARGET} hat keinen Testing-Kernel (kein KERNEL_TESTING_PATCHVER) -- gebaut wird der Default-Kernel"
+fi
 # Der Pro-Leg-Zusatz muss defconfig ueberleben: ein Symbol, das das Target nicht
 # kennt, wirft defconfig still wieder raus -- dann fehlt es im Image, ohne dass
 # der Bau scheitert. Also hier pruefen statt spaeter im Manifest suchen.
@@ -176,7 +208,10 @@ run_watched() {
 		# toolchain/install) schreibt minutenlang keine Zeile nach stdout.
 		# Zweite Meinung vom Dateisystem einholen -- ein laufender Build fasst
 		# staendig Dateien an. Der find laeuft nur, wenn stdout schon still ist.
-		if find logs build_dir/hostpkg build_dir/toolchain-* build_dir/target-* \
+		# build_dir/host und staging_dir gehoeren dazu: die tools-Phase eines
+		# kalten Baums arbeitet dort und sonst nirgends in dieser Liste.
+		if find logs build_dir/host build_dir/hostpkg build_dir/toolchain-* \
+			build_dir/target-* staging_dir \
 			-type f -newermt "-${STALL_LIMIT} seconds" -print -quit 2>/dev/null | grep -q .; then
 			echo ">> ${tag}: stdout seit ${age}s still, aber der Baum arbeitet noch -- weiter"
 			continue

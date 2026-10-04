@@ -292,6 +292,15 @@ DTS, LZMA-Loader). Quellen:
   unberührt. `build-images.sh` prüft nach `defconfig`, dass jedes
   `CONFIG_PACKAGE_…=y` daraus wirklich gesetzt ist: ein Symbol, das das Target
   nicht kennt, verschwindet dort still.
+- **Mehrere Geräte in einem Leg** (`devices: a b`, heute nur lte3301): die
+  Profil-Symbole `CONFIG_TARGET_<t>_<st>_DEVICE_<name>` liegen alle in **einer**
+  kconfig-`choice` ("Target Profile") — ein zweites `=y` überschreibt dort nur
+  das erste, `defconfig` behielte das **letzte** Gerät. `build-images.sh` schaltet
+  ab zwei Geräten deshalb auf `CONFIG_TARGET_MULTI_PROFILE=y` +
+  `CONFIG_TARGET_DEVICE_<t>_<st>_DEVICE_<name>=y` um (die defaulten nur unter
+  `TARGET_ALL_PROFILES` auf `y`, es kommt also kein fremdes Gerät dazu) und prüft
+  nach `defconfig` die passende Form. Ein-Geräte-Legs behalten die alte Form,
+  damit ihr warmer Baum nicht wegen eines Config-Wechsels neu baut.
 - Cache: `owrt-src-<slug>-<base>` (Quellbaum **inkl. build_dir/staging** persistent) +
   geteilt `owrt-dl`/`owrt-ccache`. `CONFIG_CCACHE_DIR=/ccache`, `dl`→`/dl`.
 - **`--ulimit nofile=1024:1048576`** an beiden `docker run` (Voll-Build und
