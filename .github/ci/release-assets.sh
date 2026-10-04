@@ -133,11 +133,19 @@ fi
 
 if [ -n "$IMAGES" ]; then
 	[ -d "$IMAGES" ] || die "$IMAGES is not a directory"
-	# <group>/<base>/<file>: the file names already carry target and device,
-	# only the OpenWrt base (master/stable) has to be kept apart.
+	# <group>/<base>/<file>: an image file name already carries target and
+	# device, so <base>-<file> is unique. sha256sums does not — every group has
+	# one — so that gets the group in front as well. (Learned the hard way: the
+	# upload answers 422 when an asset of that name already exists.)
 	while IFS= read -r f; do
 		base="$(basename "$(dirname "$f")")"
-		upload "$f" "$base-$(basename "$f")"
+		group="$(basename "$(dirname "$(dirname "$f")")")"
+		case "$(basename "$f")" in
+		sha256sums | *.buildinfo)
+			upload "$f" "$group-$base-$(basename "$f")" ;;
+		*)
+			upload "$f" "$base-$(basename "$f")" ;;
+		esac
 	done < <(find "$IMAGES" -mindepth 3 -maxdepth 3 -type f \
 		\( -name '*.bin' -o -name '*.itb' -o -name '*.img.gz' -o -name '*.manifest' -o -name 'sha256sums' \) | sort)
 fi

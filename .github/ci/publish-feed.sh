@@ -1,8 +1,8 @@
 #!/bin/bash
 # Publish the package trees one feed build produced — without building again.
 #
-#   publish-feed.sh <run-id>                                    # a finished build run
-#   publish-feed.sh --dir DIR --channel C --sha SHA [--run ID] [--tag T]  # trees already on disk
+#   publish-feed.sh <run-id> [--force]                          # a finished build run
+#   publish-feed.sh --dir DIR --channel C --sha SHA [--run ID] [--tag T] [--force]
 #
 # The first form downloads the run's repo-* artifacts (gh CLI) and takes the
 # channel and commit from the run itself; that is the repair path when a build
@@ -19,6 +19,13 @@
 # A late publish must never roll a channel back, so this refuses (with a
 # warning, exit 0) when main has moved on since the run, or when the release
 # tag no longer points at the run's commit or a newer release tag exists.
+#
+# --force lifts exactly that check, for the one case where it is a false
+# alarm: the commits that landed since the build touched no package at all
+# (CI, scripts, docs), so the run's trees are still what the tip would
+# produce. Check that before using it — `git diff --name-only <run-sha>..<tip>`
+# must show nothing but .github/, scripts/ and *.md. build.yml's publish_run
+# dispatch takes this path.
 #
 # Why it exists: a feed build takes hours (14 legs of 50-75 minutes on three
 # runners), the artifacts stay attached to the run for 30 days, and a failed
@@ -42,7 +49,7 @@ die() { echo "publish-feed: $*" >&2; exit 1; }
 
 REPO="${GITHUB_REPOSITORY:-ddimension/openwrt-repo}"
 RELEASE_TAG_RE='^20[0-9]{2}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$'
-DIR="" CHANNEL="" SHA="" RUN="" TAG=""
+DIR="" CHANNEL="" SHA="" RUN="" TAG="" FORCE=0
 case "${1:-}" in
 --dir)
 	while [ $# -gt 0 ]; do
@@ -61,8 +68,15 @@ case "${1:-}" in
 	[ -d "$DIR" ] || die "$DIR is not a directory"
 	;;
 [0-9]*)
-	[ $# -eq 1 ] || die "usage: $0 <run-id>"
 	RUN="$1"
+	shift
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		--force) FORCE=1 ;;
+		*) die "usage: $0 <run-id> [--force]" ;;
+		esac
+		shift
+	done
 	command -v gh >/dev/null || die "the gh CLI is needed to fetch run $RUN"
 	info="$(gh api "repos/$REPO/actions/runs/$RUN" --jq '"\(.name) \(.head_branch) \(.head_sha)"')" ||
 		die "run $RUN not found in $REPO"
@@ -95,21 +109,24 @@ if [ "$CHANNEL" = stable ]; then
 	# the commit behind the tag (an annotated tag lists it as <tag>^{})
 	tagsha="$(git ls-remote --tags "$remote" "refs/tags/$TAG" "refs/tags/$TAG^{}" |
 		awk '{ s[$2] = $1 } END { print (s["refs/tags/'"$TAG"'^{}"] != "" ? s["refs/tags/'"$TAG"'^{}"] : s["refs/tags/'"$TAG"'"]) }')"
-	if [ "$tagsha" != "$SHA" ]; then
+	if [ "$tagsha" != "$SHA" ] && [ "$FORCE" != 1 ]; then
 		echo "::warning::release tag $TAG is at ${tagsha:0:12}, not ${SHA:0:12}${RUN:+ (run $RUN)} — not published"
 		exit 0
 	fi
 	latest="$(git ls-remote --tags "$remote" | sed -n 's#.*refs/tags/##p' | grep -v '\^{}$' |
 		grep -E "$RELEASE_TAG_RE" | sort -V | tail -n1)"
-	if [ -n "$latest" ] && [ "$latest" != "$TAG" ]; then
+	if [ -n "$latest" ] && [ "$latest" != "$TAG" ] && [ "$FORCE" != 1 ]; then
 		echo "::warning::$latest is a newer release than $TAG — not published"
 		exit 0
 	fi
 else
 	tip="$(git ls-remote "$remote" "refs/heads/$CHANNEL" | cut -f1)"
 	if [ -n "$tip" ] && [ "$tip" != "$SHA" ]; then
-		echo "::warning::$CHANNEL is at ${tip:0:12} now; ${SHA:0:12}${RUN:+ (run $RUN)} is older and is not published"
-		exit 0
+		if [ "$FORCE" != 1 ]; then
+			echo "::warning::$CHANNEL is at ${tip:0:12} now; ${SHA:0:12}${RUN:+ (run $RUN)} is older and is not published"
+			exit 0
+		fi
+		echo "::warning::--force: $CHANNEL is at ${tip:0:12}, publishing the older ${SHA:0:12} anyway"
 	fi
 fi
 
