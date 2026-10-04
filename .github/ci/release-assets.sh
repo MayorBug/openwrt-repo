@@ -49,8 +49,22 @@ UPLOAD="https://uploads.github.com/repos/$REPO"
 auth=(-H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json")
 
 # curl, not gh: the runner image does not promise the gh CLI, and this is three
-# plain REST calls.
-api() { curl -sS --fail-with-body "${auth[@]}" "$@"; }
+# plain REST calls. --fail-with-body would be the obvious flag and is NOT
+# usable: the runners still carry curl 7.68 (Ubuntu 20.04), which does not know
+# it and exits with "option --fail-with-body: is unknown" — that killed the
+# first image publish that tried this (run 37214945447). So: body and status
+# code in one request, status checked here, GitHub's error text kept.
+api() {
+	local out code body
+	out="$(curl -sS -w '\n%{http_code}' "${auth[@]}" "$@")" || return 1
+	code="${out##*$'\n'}"
+	body="${out%$'\n'*}"
+	case "$code" in
+	2*) printf '%s' "$body"; return 0 ;;
+	esac
+	printf 'release-assets: HTTP %s: %s\n' "$code" "$(printf '%s' "$body" | tr -d '\n' | cut -c1-200)" >&2
+	return 1
+}
 
 # The first "id" of the tags/<tag> response is the release id (author, assets
 # and the rest come after it) — no jq needed, which the runner image does not
