@@ -30,7 +30,8 @@
 # from before the channels, nothing downgrades along it. publish-pages.sh does
 # the merging and rebuilds the signed index for it.
 #
-# Env: KEEP_VERSIONS [10], GH_TOKEN (push credentials; defaults to `gh auth token`),
+# Env: KEEP_VERSIONS [10], RELEASE_ASSETS=0 to skip the GitHub release copy,
+#      GH_TOKEN (push credentials; defaults to `gh auth token`),
 #      GITHUB_REPOSITORY [ddimension/openwrt-repo]. PAGES_* pass through to
 #      publish-pages.sh (PAGES_REMOTE for a dry run against a bare repo).
 set -euo pipefail
@@ -155,3 +156,14 @@ KEEP_VERSIONS="${KEEP_VERSIONS:-10}"
 	--keep "main/*=$KEEP_VERSIONS" \
 	--keep "stable/*=$KEEP_VERSIONS" \
 	"${pairs[@]}"
+
+# A release also gets an archive copy on its GitHub release: one zip per
+# architecture, the loose ddimension-feed.apk and the host tools. Those assets
+# do not count against the 1 GB of the Pages site and they stay when the ten
+# versions in the tree have rolled past. Not a repository to install from —
+# see release-assets.sh. Only for a release tag, and never fatal: the packages
+# are published at this point, a failed upload must not undo that.
+if [ -n "$TAG" ] && [ "${RELEASE_ASSETS:-1}" = 1 ]; then
+	"$here/release-assets.sh" --tag "$TAG" --repo "$REPO" --dir "$DIR" ||
+		echo "::warning::release assets for $TAG failed; the feed itself is published"
+fi

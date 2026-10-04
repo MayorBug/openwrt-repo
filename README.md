@@ -70,6 +70,16 @@ version](#go-back-to-an-older-package-version)). `versions.json` in the tree
 says per file which version it is, when it was built and when it was first
 published; the pre-channel mirror keeps the newest version only.
 
+Beyond that window, every release is archived on its
+[GitHub release](https://github.com/ddimension/openwrt-repo/releases): one
+`<release>-<arch>.zip` per package tree (all `.apk`, the signed `packages.adb`,
+`index.json`), the loose `ddimension-feed-<release>-<arch>.apk`, the static
+`rsim-card`, and the device images built against that release. Those assets do
+not count against the 1 GB a Pages site may have, and they stay. They are an
+archive, not a repository: the assets of a tag share one flat namespace, so the
+same package file name of eight architectures would collide, and apk resolves
+package files relative to its index — a device installs from the feed above.
+
 | Arch | Covers (among others) | stable · 25.12 | stable · snapshot | main · 25.12 | main · snapshot |
 |---|---|---|---|---|---|
 | `aarch64_cortex-a53` | qualcommax (MikroTik Chateau, ipq807x, ipq60xx), mediatek/filogic | [apk](https://ddimension.github.io/openwrt-repo/stable/openwrt-25.12/aarch64_cortex-a53/ddimension-feed.apk) · [tree](https://ddimension.github.io/openwrt-repo/stable/openwrt-25.12/aarch64_cortex-a53/) | [apk](https://ddimension.github.io/openwrt-repo/stable/snapshot/aarch64_cortex-a53/ddimension-feed.apk) · [tree](https://ddimension.github.io/openwrt-repo/stable/snapshot/aarch64_cortex-a53/) | [apk](https://ddimension.github.io/openwrt-repo/main/openwrt-25.12/aarch64_cortex-a53/ddimension-feed.apk) · [tree](https://ddimension.github.io/openwrt-repo/main/openwrt-25.12/aarch64_cortex-a53/) | [apk](https://ddimension.github.io/openwrt-repo/main/snapshot/aarch64_cortex-a53/ddimension-feed.apk) · [tree](https://ddimension.github.io/openwrt-repo/main/snapshot/aarch64_cortex-a53/) |

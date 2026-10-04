@@ -144,6 +144,20 @@ Layout der Site:
   **Pakete, die der Build nicht mehr erzeugt, fallen raus** (nach der
   Aufteilung also apman & Co.): mitgenommen wird nur, wovon der frische Baum
   mindestens eine Version enthält.
+- **GitHub-Release als Archiv.** Bei einem Release-Tag haengt
+  `.github/ci/release-assets.sh` zusaetzlich an das GitHub-Release: je Baum ein
+  `<release>-<arch>.zip` (alle `.apk`, signierte `packages.adb`, `index.json`),
+  die losen `ddimension-feed-<release>-<arch>.apk`, die Host-Tools — und aus
+  `build-device-images.yml` die fertigen Images desselben Releases
+  (`needs.feed.outputs.tag`). Gruende: Release-Assets zaehlen **nicht** gegen
+  das 1-GB-Limit der Pages-Site, sie ueberleben das Zehner-Fenster im Baum, und
+  eine Firmware-Datei gehoert auf eine Release-Seite. Es ist ausdruecklich
+  **kein** installierbares Repo: die Assets eines Tags liegen in einem flachen
+  Namensraum (gleicher Paketdateiname ueber acht Archs kollidiert), und apk holt
+  Paketdateien relativ zum Index. Der Schritt ist nicht fatal — schlaegt der
+  Upload fehl, steht der Feed trotzdem (`::warning`), und `RELEASE_ASSETS=0`
+  schaltet ihn ab. Gezippt wird im apk-tools-Container, weil das Runner-Image
+  kein `zip` zusichert; die REST-Aufrufe macht `curl` (kein `gh`, kein `jq`).
 - **apk im Publish-Job:** die Runner haben kein apk v3, das SDK-apk nur in
   einem fertigen SDK-Baum. Der Publisher startet deshalb
   `image-registry.ddimension.net/myadmin/apk-tools` (Alpine + python3,
