@@ -1,12 +1,23 @@
 # openwrt-repo
 
 OpenWrt **package feed** for the [wwand](https://github.com/ddimension/wwand)
-cellular connection manager and a few companions — signed binary repositories
-for seven architectures on
+cellular connection manager and the modem tooling around it — signed binary
+repositories for eight architectures on
 [ddimension.github.io/openwrt-repo](https://ddimension.github.io/openwrt-repo/),
 in two channels: **stable** (releases) and **main** (development). This repo
 carries the OpenWrt package definitions; most sources live in their own
 repositories, pinned to a commit.
+
+Our other packages — AP management (`apman`), multiroom audio
+(`snapcast-mptcp`, `homesync`), the `wpad` variants, `nsca-ng`,
+`usb-relay-hid`, the Lua bindings and `heatingrod` — live in
+[ddimension/openwrt-addon-feed](https://github.com/ddimension/openwrt-addon-feed)
+since 2026-10-04 and are published at
+[ddimension.github.io/openwrt-addon-feed](https://ddimension.github.io/openwrt-addon-feed/).
+Both feeds are independent and signed with the same key; `ddimension-feed`
+installs a `.list` for each. The split exists for build time: a one-line change
+in `wwand` used to rebuild boost, hostapd and collectd too, because the feed
+build throws its SDK tree away on every run.
 
 ## Packages
 
@@ -21,27 +32,15 @@ repositories, pinned to a commit.
 | `wwand-ipad` | the assistant `wwand-ipa` drives: ipad, an SGP.32 v1.3 IPA (IoT eUICC, or an SGP.22 card through an emulation signed with a device key) that reaches the card through lpac's stdio APDU protocol so wwand relays it over the modem's own channel; mbedTLS linked in statically | same | [ddimension/ipad](https://github.com/ddimension/ipad) | ✓ |
 | `wwand-rsim` | remote SIM for wwand (QMI UIM Remote): a modem runs on a card that is not in its own slot — in a reader on the router or on a SIM host over SSH (Smartmouse/Phoenix, PC/SC), in a phone over Bluetooth SAP, in a modem wwand does not manage (AT+CSIM), in another modem of the router (SIM sponsor), in a modem of another wwand router, or in an osmo-remsim SIM bank (RSPRO); `wwandctl rsim` and a LuCI page. `rsim-card` is the card-side helper alone, for a SIM host; `wwand-rsim-provider` lets this router's modem cards be borrowed by other routers | `wwand-rsim`, `wwand-rsim-provider`, `rsim-card`, `rsim-card-pcsc`, `luci-app-wwand-rsim` | [ddimension/wwand-rsim](https://github.com/ddimension/wwand-rsim) | ✓ |
 | `ddimension-feed` | this feed's address and signing key, see [Set up a device](#set-up-a-device) | same | local (`files/`) | ✓ |
-| `apman` | AP manager: ubus↔MQTT bridge, collectd plugin, on-AP RADIUS server ([apman/README.md](apman/README.md)) | same | [ddimension/apman-agent](https://github.com/ddimension/apman-agent) | ✓ |
-| `libubus-lua-async` | the stock ubus Lua binding plus `conn:call_async()` | same | upstream [ubus](https://git.openwrt.org/project/ubus.git) | via `apman` |
-| `homesync` | synchronised multiroom speaker: UCI front end for `snapclient-mptcp` | same | local (`files/`) | ✓ |
-| `snapcast-mptcp` | Snapcast with Multipath-TCP | `snapserver-mptcp`, `snapclient-mptcp` | [ddimension/snapcast](https://github.com/ddimension/snapcast) | ✓ |
-| `luacurl` | Lua binding for libcurl | same | upstream [Lua-cURL/Lua-cURLv3](https://github.com/Lua-cURL/Lua-cURLv3) | ✓ |
-| `lua-mosquitto` | Lua binding for libmosquitto | same | upstream [flukso/lua-mosquitto](https://github.com/flukso/lua-mosquitto) | ✓ |
-| `nsca-ng` | NSCA-ng client (`send_nsca`): passive check results to Nagios/Icinga over TLS-PSK; what `wwand-apntest` reports through | same | upstream [weiss/nsca-ng](https://github.com/weiss/nsca-ng) | ✓ |
 | `qfirehose` | Quectel QFirehose V1.4.21, firmware flasher | same | bundled source zip | ✓ |
 | `qflash` | Quectel QFlash 2.0, legacy firmware flasher | same | bundled source tarball | ✓ |
 | `qlog` | Quectel QLog V1.5.8, diagnostic log capture with Quectel's filter profiles | same | bundled source zip | ✓ |
-| `usb-relay-hid` | control for cheap USB HID relay boards | same | upstream [OzFalcon/usb-relay-hid](https://github.com/OzFalcon/usb-relay-hid) | ✓ |
-| `wpad-ieee8021x` | `ieee8021x` netifd protocol: wired 802.1X through wpa_supplicant's ubus interface | same | local (`files/`) | ✓ |
-| `wpad-saeradh2e` | OpenWrt's full/OpenSSL wpad plus our SAE-over-RADIUS patches (also in [ddimension/hostapd](https://github.com/ddimension/hostapd) `sae-radius-h2e`) | same | OpenWrt `hostapd` + patches | ✓ |
-| `heatingrod` | PV-surplus heating rod controller, Rust ([heatingrod/README.md](heatingrod/README.md)) | same | bundled snapshot of [heatingrod-controller](https://github.com/ddimension/heatingrod-controller) | — |
 | `pcie_mhi` | Quectel PCIe/MHI host driver V1.3.8, ported to kernel 6.18 ([pcie_mhi/README.md](pcie_mhi/README.md)) | `kmod-pcie_mhi` | bundled source | — |
 | `python3-edlclient` | Qualcomm EDL/DIAG toolkit, scoped to `qc_diag` | same | upstream [bkerler/edl](https://github.com/bkerler/edl) | — |
 
 **CI**: ✓ = built and published for every architecture; the list is
 [`.github/ci/packages`](.github/ci/packages). — = in the feed, deliberately not
-built by CI: `heatingrod` builds rust/host from source (~35–45 GB build dir),
-`pcie_mhi` does not get the RG650E past the MHI M0 handshake yet,
+built by CI: `pcie_mhi` does not get the RG650E past the MHI M0 handshake yet,
 `python3-edlclient` is built on demand. Build those locally or in a buildroot.
 
 ## Binary package repositories
@@ -415,7 +414,7 @@ scripts/backup-ap-configs.sh /srv/backup ap-attic ap-outdoor  # named APs
 scripts/backup-ap-configs.sh /srv/backup -f aps.txt -d .lan   # from a file
 ```
 
-Name no AP and the list comes from the MQTT broker: apman publishes
+Name no AP and the list comes from the MQTT broker: apman (add-on feed) publishes
 `properties/system/board` retained per AP, so subscribing to that pattern
 enumerates the fleet with no list to maintain (`-b`, or `APMAN_BROKER`;
 `APMAN_MQTT_OPTS` carries broker credentials). `-l` prints the list without
@@ -535,8 +534,7 @@ stack: tag `vX.Y.Z` on the source `stable` branch of each repository that
 changed, pin the tags on feed stable, push (builds), `scripts/release-stable.sh`.
 
 The other git-source packages (upstreams with their own or no version scheme)
-are pinned via `PKG_SOURCE_VERSION` by hand. `apman` has its own release script
-([apman/README.md](apman/README.md)). To ship a new version:
+are pinned via `PKG_SOURCE_VERSION` by hand. To ship a new version:
 
 1. bump `PKG_SOURCE_VERSION` (and `PKG_VERSION` or `PKG_SOURCE_DATE`, as the
    package uses them) in the package's Makefile and increment `PKG_RELEASE`,
@@ -554,11 +552,10 @@ CI runs gh-action-sdk in **per-package mode** (`PACKAGES`), which builds
 only the packages listed in [`.github/ci/packages`](.github/ci/packages) plus
 their real dependencies and enforces the mirror hash. The hash check is a
 no-op for the packages that build from `files/` in this repo and declare no
-`PKG_SOURCE` (`ddimension-feed`, `homesync`, `wpad-ieee8021x` and the `q*`
-packages). `homesync` needs `snapclient-mptcp` only at runtime
-(`EXTRA_DEPENDS`); `snapcast-mptcp` is on the list itself, so its C++ tree is
-compiled in CI. `heatingrod`, `pcie_mhi` and `python3-edlclient` are not on
-the list: a change to them is only as tested as your local build.
+`PKG_SOURCE` (`ddimension-feed` and the `q*` packages). `pcie_mhi` and
+`python3-edlclient` are not on the list: a change to them is only as tested as
+your local build. The add-on packages are not here at all any more — they are
+built by [ddimension/openwrt-addon-feed](https://github.com/ddimension/openwrt-addon-feed).
 
 ### Publishing
 

@@ -7,6 +7,16 @@ packages here; the reasoning and the device side are in `README.md`, CI,
 runners and gh-pages in `.github/ci/README.md`. Everything is English.
 Commit/push only when asked.
 
+## Two feeds since 2026-10-04
+
+Only the modem world lives here. The add-on packages (apman, snapcast-mptcp,
+homesync, the wpad variants, nsca-ng, usb-relay-hid, luacurl, lua-mosquitto,
+libubus-lua-async, heatingrod) are in **ddimension/openwrt-addon-feed**, with
+their own runners, their own gh-pages site and the same signing key. Nothing
+here depends on them. `ddimension-feed` installs one `.list` per feed, so a
+device follows both. A non-site-specific change to `publish-pages.sh` or the
+release scripts belongs in both repos — say so in the commit message.
+
 ## Branches are channels — two independent lines
 
 | Branch | Publishes | Moves by |
@@ -14,8 +24,7 @@ Commit/push only when asked.
 | `main` | `…/main/<release>/<arch>/` — development, on every push | every commit; this is where you work |
 | `stable` | `…/stable/<release>/<arch>/` and the pre-channel path `…/<release>/<arch>/` — releases, device images — **only from a release tag** | cherry-picks, `scripts/stable-take.sh`, fixes made on stable; a push builds but publishes nothing |
 
-- Commit on `main`. Check `git branch --show-current` first — apman-agent's
-  `contrib/release.sh` refuses a feed that is not on main, do the same by hand.
+- Commit on `main`. Check `git branch --show-current` first.
 - `stable` is NOT a pointer onto main: it takes what is ready (`git cherry-pick
   -x`, `scripts/stable-take.sh <pkg>|--ci|--all`) and leaves the rest. Change
   stable only when the user asks for it; it only moves forward (a GitHub
@@ -35,11 +44,10 @@ Commit/push only when asked.
 | Package | How |
 |---|---|
 | `wwand`, `luci-app-wwand`, `luci-proto-wwand` | `scripts/bump-source.sh <pkg> <tag\|commit>` |
-| other git-source packages (luacurl, snapcast-mptcp, …) | bump `PKG_SOURCE_VERSION` (+ `PKG_VERSION` or `PKG_SOURCE_DATE` as the Makefile uses them), `PKG_RELEASE`+1, then `scripts/update-hashes.sh <pkg>` |
-| `apman` | from apman-agent: `contrib/release.sh` ([apman/README.md](apman/README.md)) |
+| other git-source packages (`wwand-qlog`, `wwand-ipa`, `wwand-ipad`, `wwand-rsim`, …) | bump `PKG_SOURCE_VERSION` (+ `PKG_VERSION` or `PKG_SOURCE_DATE` as the Makefile uses them), `PKG_RELEASE`+1, then `scripts/update-hashes.sh <pkg>` |
 | `wwand-lpac` | upstream release tarball: `PKG_VERSION` + `PKG_HASH` |
 | `heatingrod` | git-archive snapshot of heatingrod-controller in `files/`, `PKG_HASH` ([heatingrod/README.md](heatingrod/README.md)) |
-| `ddimension-feed`, `homesync`, `wpad-ieee8021x`, `q*` | built from `files/` in this repo — edit, bump `PKG_RELEASE` |
+| `ddimension-feed`, `q*` (qfirehose, qflash, qlog) | built from `files/`/a bundled archive in this repo — edit, bump `PKG_RELEASE` |
 
 - **Versions of the three wwand packages are derived, never typed.**
   `bump-source.sh` takes the channel from the checked-out feed branch

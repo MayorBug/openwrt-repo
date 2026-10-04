@@ -1,10 +1,12 @@
 # CI- und Build-Infrastruktur
 
-Alles läuft auf **eigenen self-hosted Runnern** (derzeit n5–n7). `ddimension` ist
-ein **User-Account, keine Org** → Runner sind **repo-scoped an dieses Repo**;
-geteilte/Org-Runner gibt es nicht. Deshalb liegen auch die Image-Build-Workflows
-hier (nicht im openwrt-Fork), obwohl sie OpenWrt-Quellen bauen — der Fork hat
-keine Runner und Actions ist dort aus.
+Alles läuft auf **eigenen self-hosted Runnern** (n401–n412, Label `openwrt`).
+`ddimension` ist ein **User-Account, keine Org** → Runner sind **repo-scoped an
+dieses Repo**; geteilte/Org-Runner gibt es nicht. Deshalb liegen auch die
+Image-Build-Workflows hier (nicht im openwrt-Fork), obwohl sie OpenWrt-Quellen
+bauen — der Fork hat keine Runner und Actions ist dort aus. Aus demselben Grund
+hat **ddimension/openwrt-addon-feed** (die Addon-Pakete, seit 2026-10-04 eigenes
+Repo) seine eigenen CTs: drei der elf sind dorthin umgezogen.
 
 Zwei Branches = zwei Kanäle des Feeds (Details: Haupt-README, „Branches and
 channels“): **`main`** = Entwicklung, **`stable`** = Releases. Beide sind
