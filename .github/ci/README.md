@@ -7,13 +7,17 @@ hier (nicht im openwrt-Fork), obwohl sie OpenWrt-Quellen bauen — der Fork hat
 keine Runner und Actions ist dort aus.
 
 Zwei Branches = zwei Kanäle des Feeds (Details: Haupt-README, „Branches and
-channels“): **`main`** = Entwicklung, **`stable`** = Releases
-(`scripts/release-stable.sh`: Fast-Forward + Tag `YYYY.MM.DD`).
+channels“): **`main`** = Entwicklung, **`stable`** = Releases. Beide sind
+eigenständige Linien: stable übernimmt per Cherry-Pick oder
+`scripts/stable-take.sh` von main, was fertig ist. Ein Push auf stable baut nur;
+**publiziert wird stable nur durch einen Release-Tag** `YYYY.MM.DD[.N]`
+(`scripts/release-stable.sh`).
 
 Zwei Workflows:
-- **`build.yml`** — baut den **Paket-Feed** für den gepushten Branch und
-  publiziert ihn nach `https://ddimension.github.io/openwrt-repo/<kanal>/<release>/<arch>/`;
-  stable zusätzlich in den Alt-Pfad `<release>/<arch>/`.
+- **`build.yml`** — baut den **Paket-Feed** für den gepushten Branch oder Tag und
+  publiziert ihn nach `https://ddimension.github.io/openwrt-repo/<kanal>/<release>/<arch>/`
+  (main bei jedem Push, stable nur bei einem Release-Tag); stable zusätzlich in
+  den Alt-Pfad `<release>/<arch>/`.
 - **`build-device-images.yml`** — baut fertige **Firmware-Images** (chateau,
   nbg7815, nr7101, LTE3301-M209/Q222, lte3301-plus) mit wwand-Stack und
   `ddimension-feed`, immer gegen den **stable**-Kanal.
@@ -97,8 +101,8 @@ Layout der Site:
 ```
 /keys/…                        Signaturschlüssel (nur überlagert, nie gelöscht)
 /main/<release>/<arch>/        Entwicklungskanal   (nur main-Läufe)
-/stable/<release>/<arch>/      Release-Kanal       (nur stable-Läufe)
-/<release>/<arch>/             Alt-Pfad = Kopie von stable (nur stable-Läufe)
+/stable/<release>/<arch>/      Release-Kanal       (nur Release-Tag-Läufe)
+/<release>/<arch>/             Alt-Pfad = Kopie von stable (nur Release-Tag-Läufe)
 /images/<gruppe>/<base>/       Device-Images (build-device-images.yml)
 ```
 
@@ -153,12 +157,17 @@ Skript auf ein Bare-Repo statt auf GitHub.
 ## Workflow 1: `build.yml` (Paket-Feed)
 
 - **Auslöser:** Push auf `main` oder `stable` (reine `.md`-Pushes nicht:
-  `paths-ignore`), `workflow_dispatch`. Ein Dispatch auf einem anderen Branch
-  baut nur, publiziert nicht.
-- **Kanal = Branch:** `DDIMENSION_FEED_CHANNEL` (Workflow-env) bestimmt das
-  Publish-Ziel und die URL, die `ddimension-feed` auf Geräten einträgt.
-- **Concurrency je Branch** (`build-<branch>`, cancel-in-progress): ein neuer
-  main-Push bricht nur den laufenden main-Build ab, nie stable.
+  `paths-ignore`), Release-Tags `20[0-9][0-9].[0-9][0-9].[0-9][0-9]*` (für Tags
+  gelten keine Pfadfilter), `workflow_dispatch`.
+- **Publiziert wird:** main-Push → Kanal main; Release-Tag → Kanal stable. Ein
+  Push auf den stable-Branch und ein Dispatch auf einem anderen Branch bauen nur.
+  `DDIMENSION_FEED_CHANNEL` (Workflow-env: Tag oder stable → stable, sonst main)
+  bestimmt Publish-Ziel und die URL, die `ddimension-feed` auf Geräten einträgt.
+- **Concurrency je Ref** (`build-<ref>`, cancel-in-progress): ein neuer main-Push
+  bricht nur den laufenden main-Build ab, nie stable oder einen Tag-Lauf.
+- **`publish-feed.sh`** verweigert (Warnung, exit 0) für main einen Lauf, dessen
+  Commit nicht mehr die Spitze ist, für stable einen Tag, der nicht mehr auf den
+  Lauf-Commit zeigt oder hinter dem schon ein neuerer Release-Tag steht.
 - **Paketliste:** `.github/ci/packages` (auch Default von `scripts/local-build.sh`).
   Leer = Fehler, denn eine leere `PACKAGES` baut im SDK den ganzen Feed.
 - Baut via **gevendorter** `openwrt/gh-action-sdk` (`.github/actions/openwrt-sdk`),
@@ -205,8 +214,10 @@ Skript auf ein Bare-Repo statt auf GitHub.
 ## Workflow 2: `build-device-images.yml` (Firmware-Images)
 
 **Auslöser:**
-- **Automatisch** nach jedem erfolgreichen Feed-Lauf (`build`) auf **`stable`** —
-  via `workflow_run` (nur bei `conclusion == success`). main-Läufe lösen nichts aus.
+- **Automatisch** nach jedem erfolgreichen Feed-Lauf (`build`) eines
+  **Release-Tags** — via `workflow_run` (nur bei `conclusion == success`; der
+  `branches`-Filter greift auf `head_branch`, bei Tag-Läufen der Tag-Name).
+  main-Läufe und Pushes auf den stable-Branch lösen nichts aus.
   `concurrency` verhindert Stapeln.
 - **Manuell:** `gh workflow run build-device-images.yml -R ddimension/openwrt-repo --ref main`
   (`-f testing_kernel=true`: nur die master-Voll-Builds mit Testkernel; stable- und
@@ -218,7 +229,9 @@ main (Änderungen wirken sofort), die Pakete kommen explizit aus stable
 (`FEED_CHANNEL: stable` im Workflow-env).
 
 **Ein Feed-Commit je Lauf:** Der `feed`-Job löst ihn einmal auf — nach
-`workflow_run` den `head_sha` des Feed-Laufs, von Hand die Spitze von stable.
+`workflow_run` den `head_sha` des Feed-Laufs, von Hand den Commit des neuesten
+Release-Tags (nicht die Spitze von stable — die kann unveröffentlichte
+Vorbereitung tragen).
 Voll-Builds pinnen ihn, der zyxel-Leg wartet auf seinen `.published`-Stempel,
 `publish-images` stempelt die Images mit ihm. Ohne grünen Feed-Lauf (Job
 `feed` übersprungen) wird nichts gebaut und nichts publiziert.
@@ -335,14 +348,20 @@ seiner DTS-Änderung im `fullbuild`-Leg. wwand kommt **signiert** aus gh-pages:
 
 ## Betrieb — Kurzreferenz
 
-- **Release:** `scripts/release-stable.sh` (Fast-Forward stable + Tag, fragt vor dem
-  Push; verweigert `_p`-Versionen und Refs, die nicht auf origin/main liegen).
-  Hotfix-Weg: Haupt-README.
-- **wwand/LuCI-Quelle pinnen:** `scripts/bump-source.sh <paket> <tag|commit>` —
-  Version aus `git describe` (`vX.Y.Z` → `X.Y.Z`, danach `X.Y.Z_pN`; rc-Tags
-  zählen nicht), `PKG_RELEASE:=1`, Mirror-Hash im SDK-Container; stellt das
-  Makefile wieder her, wenn der Hash scheitert. Verweigert gleiche Version für
-  anderen Commit und Rückschritte (`--force`).
+- **stable füttern:** `git cherry-pick -x` auf stable, oder `scripts/stable-take.sh
+  <paket>…` / `--ci` (`.github/`) / `--all` (merge main) — ein Push baut nur.
+- **Release:** `scripts/release-stable.sh [<commit>]` (Tag auf stable, Default die
+  Spitze; fragt vor dem Push; verweigert Commits nicht auf origin/stable, ohne
+  grünen Build, schon released, oder mit `_p`/`_pre`-Versionen — `--allow-dev`).
+  Nur der Tag wird gepusht; der Tag-Lauf publiziert stable.
+- **wwand/LuCI-Quelle pinnen:** `scripts/bump-source.sh <paket> <tag|commit>` auf
+  dem Feed-Branch, für den es ist — Kanal aus dem Branch (`--channel`): stable
+  pinnt Quell-stable (`vX.Y.Z` → `X.Y.Z`, danach `X.Y.Z_pN`), main pinnt
+  Quell-main (ab Marker `vX.Y.Z-dev` → `X.Y.Z_preN`); der Commit muss auf dem
+  gleichnamigen Quell-Branch liegen. `PKG_RELEASE:=1`, Mirror-Hash im
+  SDK-Container; stellt das Makefile wieder her, wenn der Hash scheitert.
+  Verweigert gleiche Version für anderen Commit und Rückschritte (`--force`).
+  `--dry-run` zeigt nur, was es täte.
 - **Feed-Build von Hand:** `gh workflow run build.yml -R ddimension/openwrt-repo --ref stable`
   (bzw. `--ref main`). Nötig u. a., wenn ein neuer Branch ohne neue Commits
   gepusht wurde — GitHub startet dann wegen `paths-ignore` ggf. keinen Lauf.

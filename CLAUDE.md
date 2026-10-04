@@ -7,19 +7,28 @@ packages here; the reasoning and the device side are in `README.md`, CI,
 runners and gh-pages in `.github/ci/README.md`. Everything is English.
 Commit/push only when asked.
 
-## Branches are channels
+## Branches are channels — two independent lines
 
 | Branch | Publishes | Moves by |
 |---|---|---|
-| `main` | `…/main/<release>/<arch>/` — development | every commit; this is where you work |
-| `stable` | `…/stable/<release>/<arch>/` and the pre-channel path `…/<release>/<arch>/` — releases, device images | `scripts/release-stable.sh` only, and only when the user asks for a release |
+| `main` | `…/main/<release>/<arch>/` — development, on every push | every commit; this is where you work |
+| `stable` | `…/stable/<release>/<arch>/` and the pre-channel path `…/<release>/<arch>/` — releases, device images — **only from a release tag** | cherry-picks, `scripts/stable-take.sh`, fixes made on stable; a push builds but publishes nothing |
 
 - Commit on `main`. Check `git branch --show-current` first — apman-agent's
   `contrib/release.sh` refuses a feed that is not on main, do the same by hand.
-- Never commit, push or merge to `stable` yourself. It only moves forward (a
-  GitHub ruleset refuses force-push and deletion; every src-git checkout of
-  the feed runs `git pull --ff-only`). The hotfix flow in `README.md` is for
-  when the user explicitly asks for one.
+- `stable` is NOT a pointer onto main: it takes what is ready (`git cherry-pick
+  -x`, `scripts/stable-take.sh <pkg>|--ci|--all`) and leaves the rest. Change
+  stable only when the user asks for it; it only moves forward (a GitHub
+  ruleset refuses force-push and deletion).
+- **A release is a tag** on stable: `scripts/release-stable.sh` (only when the
+  user asks). It refuses a commit not on origin/stable, without a green build,
+  already released, or with a `_p`/`_pre` version (`--allow-dev`). The tag push
+  is what publishes stable and starts the device images.
+- The wwand stack has the same two lines in its source repos: feed stable pins
+  their `stable` (releases `vX.Y.Z` tagged there), feed main their `main`
+  (counting `X.Y.Z_preN` from a `vX.Y.Z-dev` marker). See below.
+- Device images: prerequisite `image-registry.ddimension.net/myadmin/openwrt-builder:latest`
+  (a missing image kills every image leg).
 
 ## Pinning a new source commit
 
@@ -33,17 +42,23 @@ Commit/push only when asked.
 | `ddimension-feed`, `homesync`, `wpad-ieee8021x`, `q*` | built from `files/` in this repo — edit, bump `PKG_RELEASE` |
 
 - **Versions of the three wwand packages are derived, never typed.**
-  `bump-source.sh` takes them from `git describe`: tag `vX.Y.Z` → `X.Y.Z`
-  (release material), N commits after it → `X.Y.Z_pN` (main). `PKG_RELEASE`
-  is 1 for every new version; a packaging-only change is a `PKG_RELEASE` bump
-  by hand. No `PKG_SOURCE_DATE` — a date version sorts above every real number
-  in apk. `bump-source.sh` refuses the same version for a different commit and
-  a lower version (`--force`); `release-stable.sh` refuses a `_p` version and a
-  ref that is not on origin/main.
-- **A stack release:** tag `vX.Y.Z` in wwand, luci-app-wwand and
-  luci-proto-wwand on the commits that belong together (same X.Y.Z in all
-  three), `bump-source.sh` each to its tag, commit on main, push once, let
-  main build and prove itself — the release itself is the user's call.
+  `bump-source.sh` takes the channel from the checked-out feed branch
+  (`--channel` overrides) and the version from `git describe` of the pinned
+  commit: on stable from release tags (`vX.Y.Z` → `X.Y.Z`, N after it →
+  `X.Y.Z_pN`), on main from the `vX.Y.Z-dev` marker (→ `X.Y.Z_preN`). apk:
+  `1.6.10 < 1.6.10_p3 < 1.7.0_pre1 < 1.7.0`, so main sorts above every stable
+  patch release. The commit must be on the source branch of the same name.
+  `PKG_RELEASE` is 1 for every new version; a packaging-only change is a
+  `PKG_RELEASE` bump by hand. No `PKG_SOURCE_DATE` — a date version sorts above
+  every real number in apk. `bump-source.sh` refuses the same version for a
+  different commit, the wrong source branch, and a lower version (`--force`).
+  A source repo without a `stable` branch keeps the one-line derivation.
+- **A stack patch release:** fix on source stable (cherry-pick from main, or
+  fix there and merge up into main), tag `vX.Y.Z` on source stable in each repo
+  that changed, `bump-source.sh` each on feed stable, push (builds), then
+  `release-stable.sh` — the release itself is the user's call. **Opening a new
+  minor:** merge source main into source stable, tag `vX.Y.0` there, put
+  `vX.(Y+1).0-dev` on source main.
 - **Pin the commit, not the tag object.** `bump-source.sh` resolves
   `^{commit}`; by hand use `git rev-parse vX.Y.Z^{commit}` — the annotated
   tag's own sha builds a different tarball and the hash check fails.
@@ -67,9 +82,9 @@ Commit/push only when asked.
 - gh-pages is written only by `.github/ci/publish-pages.sh`. Never push
   gh-pages by hand, and never re-run a build run from before the channel split
   (2026-09-11): its old publish step deletes `main/` and `stable/`.
-- Device images build from stable only, after a green stable run. A change on
-  main reaches images with the next release; the image workflow itself always
-  runs from main.
+- Device images build from stable releases only, after a green release-tag
+  run (or by hand: the newest release tag). The image workflow itself always
+  runs from main; the packages come from the release.
 - Before pushing CI changes: `docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint`
   and `docker run --rm -v "$PWD:/mnt:ro" -w /mnt koalaman/shellcheck:stable -x <scripts>`.
 - Anything big: test locally first,

@@ -249,16 +249,17 @@ only pulse the reset line instead of power-cycling the modem. Should the patch
 stop applying after an upstream change, that leg fails loudly
 (`build-images.sh`) — refresh the patch, it is not carried in a branch.
 
-Every run builds against **one** stable commit: the one of the feed run that
-triggered it, or, started by hand, the tip of stable at that moment. Full
+Every run builds against **one** stable commit: the one of the release whose
+feed run triggered it, or, started by hand, the commit of the newest release
+tag. Full
 builds add this feed as `src-git` pinned to it (`…openwrt-repo.git^<sha>`);
 the ImageBuilder legs pull the packages **signed** from
 `stable/<release>/mipsel_24kc/` on gh-pages, after waiting until that tree
 carries the `.published` stamp of that commit; the published images are
 stamped with it.
 
-**Triggers:** automatically after every successful feed run on `stable`
-(i.e. after every release), and manually via
+**Triggers:** automatically after every successful feed run of a release tag,
+and manually via
 `gh workflow run build-device-images.yml -R ddimension/openwrt-repo --ref main`.
 `-f testing_kernel=true` builds only the master full builds, with
 `KERNEL_TESTING_PATCHVER`; the stable and ImageBuilder legs are skipped, and
@@ -293,8 +294,9 @@ Add to `feeds.conf` (or `feeds.conf.default`) of an OpenWrt buildroot or SDK:
 src-git wwand https://github.com/ddimension/openwrt-repo.git;stable
 ```
 
-`;stable` follows releases, `;main` development, and `^<commit>` pins one
-commit. Then:
+`;stable` follows the stable branch (releases plus any preparation not yet
+released), `;main` development, and `^<commit>` pins one commit — the commit of
+a release tag for exactly what devices get. Then:
 
 ```
 ./scripts/feeds update wwand
@@ -433,66 +435,77 @@ runners and the gh-pages publisher: [.github/ci/README.md](.github/ci/README.md)
 
 ### Branches and channels
 
-Two branches, and each one is a channel of the binary feed:
+Two long-lived branches, independent of each other, and each one is a channel
+of the binary feed:
 
-| Branch | Channel | Published under | For |
+| Branch | Channel | Published under | Published by |
 |---|---|---|---|
-| `main` | development | `…/main/<release>/<arch>/` | every change as soon as it is merged |
-| `stable` | releases | `…/stable/<release>/<arch>/` and the pre-channel `…/<release>/<arch>/` | devices, and the device images |
+| `main` | development | `…/main/<release>/<arch>/` | every push to `main` |
+| `stable` | releases | `…/stable/<release>/<arch>/` and the pre-channel `…/<release>/<arch>/` | a release tag `YYYY.MM.DD[.N]` on `stable` — a push to the `stable` branch only builds |
 
-Work happens on `main`. A release moves `stable` forward to a commit of `main`
-and tags it:
-
-```
-scripts/release-stable.sh             # stable -> origin/main, tag YYYY.MM.DD
-scripts/release-stable.sh <commit>    # release an older state of main
-```
-
-The script only ever fast-forwards `stable`, lists the commits and the package
-versions that change, and pushes branch and tag in one atomic push after
-asking. It refuses a ref that is not on `origin/main` (built there first),
-and while any package carries a development version (see
-[Versions](#versions)). That push starts the stable feed build; its success
-starts the device images. A release that changes only `.md` files starts no
-build — `gh workflow run build.yml -R ddimension/openwrt-repo --ref stable`.
-
-`stable` never moves backwards. A GitHub ruleset refuses force-pushes and
-deletion: every src-git checkout of this feed updates with `git pull
---ff-only`, and every installed device follows stable. A fix that cannot wait
-for `main` goes onto `stable` directly, and then back:
+`stable` is not a pointer onto `main`. It takes from main what is ready and
+leaves the rest, in any of these ways:
 
 ```
-git switch -c hotfix origin/stable     # fix, commit
-git push origin HEAD:stable            # builds and publishes stable
-git tag -a YYYY.MM.DD -m "…" && git push origin YYYY.MM.DD   # .2 if that day has one
-git switch main && git merge origin/stable && git push
+git switch -c take origin/stable && git cherry-pick -x <commit> && git push origin HEAD:stable
+scripts/stable-take.sh <pkg>...      # those package directories, as on main
+scripts/stable-take.sh --ci          # .github/ (workflows, CI scripts)
+scripts/stable-take.sh --all         # merge main into stable
 ```
 
-Until `origin/stable` is merged back, `release-stable.sh` refuses to release,
-because stable would lose the fix.
+and a fix that belongs on stable first is made there (and merged up into
+`main` afterwards). For the wwand stack the source repositories have the same
+two lines: feed stable pins their `stable` branch, feed main their `main`
+([Versions](#versions)).
 
-Each channel publishes with the CI scripts of its own branch, so a change to
-the publishing (`.github/ci/publish-pages.sh`, the site layout) reaches the
-stable side with the next release. The device-image workflow always runs from
-`main` (GitHub runs `workflow_run` workflows from the default branch), so a
-change there takes effect at once — still against stable packages.
+Pushes to `stable` build and publish nothing, so a release can be prepared in
+several steps. The release itself is a tag:
+
+```
+scripts/release-stable.sh             # tag the tip of stable YYYY.MM.DD
+scripts/release-stable.sh <commit>    # an earlier commit of stable
+```
+
+It refuses a commit that is not on `origin/stable`, one without a successful
+build run (`--no-ci-check` for a commit that built nothing), one already
+released, and while any package carries a development version
+(`X.Y.Z_pN`/`X.Y.Z_preN`; `--allow-dev` overrides). It lists the commits and
+package versions since the previous release tag and pushes only the tag; that
+build publishes stable, and its success starts the device images.
+
+`stable` still never moves backwards: a GitHub ruleset refuses force-pushes and
+deletion. Note for `src-git …;stable` users: that follows the stable BRANCH,
+which may carry preparation that is not released yet; pin a release with
+`^<commit of the tag>` for exactly what devices get.
+
+Each channel builds with the CI scripts of its own commit — a change to the
+publishing reaches stable with `scripts/stable-take.sh --ci`. The device-image
+workflow always runs from `main` (GitHub runs `workflow_run` workflows from the
+default branch), against the stable packages of the release that triggered it.
 
 ### Versions
 
-`wwand`, `luci-app-wwand` and `luci-proto-wwand` carry the version of the
-wwand release they belong to; the three source repositories are tagged
-`vX.Y.Z` together. [`scripts/bump-source.sh`](scripts/bump-source.sh) derives
-the package version from the pinned commit with `git describe`:
+`wwand`, `luci-app-wwand` and `luci-proto-wwand` have two lines in their
+source repositories as well: releases `vX.Y.Z` are tagged on their `stable`
+branch, and `main` carries a marker `vX.Y.0-dev` where the minor it develops
+opened. [`scripts/bump-source.sh`](scripts/bump-source.sh) derives the package
+version from the pinned commit and the channel (the checked-out feed branch,
+or `--channel`):
 
 | Pinned commit | Package version | Channel |
 |---|---|---|
-| tag `v1.6.6` | `1.6.6-r1` | stable |
-| 3 commits after `v1.6.6` | `1.6.6_p3-r1` | main |
+| tag `v1.6.10` on source stable | `1.6.10-r1` | stable (release) |
+| 3 commits after `v1.6.10` on source stable | `1.6.10_p3-r1` | stable (not releasable) |
+| 14 commits after `v1.7.0-dev` on source main | `1.7.0_pre14-r1` | main |
 
-apk orders `1.6.6` < `1.6.6_p3` < `1.6.7`, so both channels upgrade normally,
-and no build date is part of a version. `-rN` is OpenWrt's packaging revision:
-back to 1 with every new version, counted up by hand for packaging-only
-changes.
+apk orders `1.6.10` < `1.6.10_p3` < `1.7.0_pre1` < `1.7.0_pre14` < `1.7.0`, so
+main always sorts above every stable patch release, both channels upgrade
+normally, and no build date is part of a version. The pinned commit must be on
+the source branch of the same name. Opening a new minor: merge source main into
+source stable, tag `vX.Y.0` there, put the next `vX.(Y+1).0-dev` on main.
+`-rN` is OpenWrt's packaging revision: back to 1 with every new version,
+counted up by hand for packaging-only changes. Other git-source packages (one
+line, no source `stable` branch) keep `vX.Y.Z` → `X.Y.Z`, then `X.Y.Z_pN`.
 
 Until r73 / r34 / r17 these packages had no version of their own, and OpenWrt
 derived one from date and commit (`2026.09.11~c27f72e6`). apk sorts that above
@@ -502,22 +515,24 @@ apk's eyes — once, and only in number: 1.6.6 is the r73 / r34 / r17 code. See
 
 ### Updating a package to a newer source commit
 
-Changes go to `main`; stable gets them with the next release.
+Changes go to `main`; stable takes them when they are ready (above).
 
-For `wwand`, `luci-app-wwand` and `luci-proto-wwand` there is one command:
+For `wwand`, `luci-app-wwand` and `luci-proto-wwand` there is one command, run
+on the feed branch it is meant for:
 
 ```
-scripts/bump-source.sh wwand main         # development: e.g. 1.6.6_p3
-scripts/bump-source.sh wwand v1.6.7       # a release:   1.6.7
+scripts/bump-source.sh wwand main         # on feed main:   e.g. 1.7.0_pre3
+scripts/bump-source.sh wwand v1.6.10      # on feed stable: 1.6.10
 ```
 
 It pins the commit, sets `PKG_VERSION` from `git describe`
 ([Versions](#versions)), resets `PKG_RELEASE` to 1, and runs
 `scripts/update-hashes.sh` — restoring the Makefile if that fails; commit the
 Makefile. It refuses the same version for a different commit (the tarball
-name would be reused) and a lower version than the current one (`--force`). A release of the stack: tag
-`vX.Y.Z` in the wwand, luci-app-wwand and luci-proto-wwand repositories, pin
-the three tags, commit, `scripts/release-stable.sh`.
+name would be reused), a commit that is not on the channel's source branch,
+and a lower version than the current one (`--force`). A patch release of the
+stack: tag `vX.Y.Z` on the source `stable` branch of each repository that
+changed, pin the tags on feed stable, push (builds), `scripts/release-stable.sh`.
 
 The other git-source packages (upstreams with their own or no version scheme)
 are pinned via `PKG_SOURCE_VERSION` by hand. `apman` has its own release script
@@ -531,7 +546,9 @@ are pinned via `PKG_SOURCE_VERSION` by hand. `apman` has its own release script
    writes it into the Makefile,
 3. commit both changes together on `main` — CI builds and publishes it to the
    main channel,
-4. once it has proven itself there, release: `scripts/release-stable.sh`.
+4. once it has proven itself there, take it onto stable
+   (`scripts/stable-take.sh <package>`), and release with
+   `scripts/release-stable.sh` when stable is ready.
 
 CI runs gh-action-sdk in **per-package mode** (`PACKAGES`), which builds
 only the packages listed in [`.github/ci/packages`](.github/ci/packages) plus

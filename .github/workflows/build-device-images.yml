@@ -2,8 +2,9 @@
 # und stable, mit komplettem wwand-Stack und ddimension-feed — IMMER gegen den
 # stable-Kanal dieses Feeds, und zwar gegen genau EINEN Commit davon:
 #   feed     : loest diesen Commit einmal auf (nach einem Feed-Lauf dessen
-#             head_sha, von Hand die aktuelle Spitze von stable). Alle Legs und
-#             der Stempel der publizierten Images nehmen ihn von hier.
+#             head_sha, von Hand der Commit des NEUESTEN Release-Tags — nicht
+#             die Spitze von stable, die kann unveroeffentlichte Vorbereitung
+#             tragen). Alle Legs und der Stempel der Images nehmen ihn von hier.
 #   fullbuild: Voll-Buildroot je Geraet (PR-Geraet, Kernel-Patch oder eigene
 #             DTS-Aenderung -> kein ImageBuilder moeglich, der bringt seinen
 #             Kernel fertig mit). chateau master/stable, nbg7815 nur master,
@@ -32,13 +33,15 @@ on:
         description: 'Nur die master-Voll-Builds mit KERNEL_TESTING_PATCHVER (z.B. 6.18) bauen; stable- und ImageBuilder-Legs werden uebersprungen. Nur Artefakte, kein Publish nach gh-pages.'
         type: boolean
         default: false
-  # Nach jedem erfolgreichen Feed-Lauf ("build") auf stable automatisch Images
-  # bauen, damit ein frisches Release direkt in Images landet. main-Laeufe loesen
-  # hier nichts aus.
+  # Nach jedem erfolgreichen Feed-Lauf eines RELEASE-TAGS automatisch Images
+  # bauen, damit ein frisches Release direkt in Images landet. Bei einem
+  # Tag-Lauf ist head_branch der Tag-Name, daher das Datumsmuster. Pushes auf
+  # den stable-Branch bauen nur und publizieren nichts — sie loesen hier
+  # ebensowenig aus wie main-Laeufe.
   workflow_run:
     workflows: [build]
     types: [completed]
-    branches: [stable]
+    branches: ['20[0-9][0-9].[0-9][0-9].[0-9][0-9]*']
 
 concurrency:
   group: build-device-images
@@ -52,9 +55,10 @@ env:
 
 jobs:
   # Der eine Feed-Commit dieses Laufs. Nach workflow_run der des gruenen
-  # Feed-Laufs; von Hand die Spitze von stable zum Startzeitpunkt — sonst baute
-  # der Voll-Build die Spitze, der zyxel-Leg den gerade ausgelieferten Baum, und
-  # der Stempel nennte main.
+  # Feed-Laufs; von Hand der des neuesten Release-Tags zum Startzeitpunkt —
+  # genau der Stand, den der stable-Baum auf gh-pages traegt. (Die Spitze von
+  # stable waere falsch: sie kann Vorbereitung tragen, die noch kein Release ist,
+  # und der zyxel-Leg wartete dann auf einen Stempel, der nie kommt.)
   feed:
     # manueller Dispatch immer; via workflow_run nur, wenn der Feed-Lauf gruen war
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
@@ -68,7 +72,15 @@ jobs:
           RUN_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           sha="$RUN_SHA"
-          [ -n "$sha" ] || sha="$(git ls-remote "$FEED_GIT" "refs/heads/$FEED_CHANNEL" | cut -f1)"
+          if [ -z "$sha" ]; then
+            tag="$(git ls-remote --tags "$FEED_GIT" | sed -n 's#.*refs/tags/##p' | grep -v '\^{}$' |
+              grep -E '^20[0-9]{2}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$' | sort -V | tail -n1)"
+            [ -n "$tag" ] || { echo "::error::kein Release-Tag in $FEED_GIT"; exit 1; }
+            # annotierter Tag: der Commit steht unter <tag>^{}
+            sha="$(git ls-remote --tags "$FEED_GIT" "refs/tags/$tag^{}" | cut -f1)"
+            [ -n "$sha" ] || sha="$(git ls-remote --tags "$FEED_GIT" "refs/tags/$tag" | cut -f1)"
+            echo "neuestes Release: $tag"
+          fi
           [ -n "$sha" ] || { echo "::error::$FEED_CHANNEL von $FEED_GIT nicht aufloesbar"; exit 1; }
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "Feed: $FEED_CHANNEL @ $sha"

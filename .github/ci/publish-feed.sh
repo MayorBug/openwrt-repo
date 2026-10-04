@@ -2,7 +2,7 @@
 # Publish the package trees one feed build produced — without building again.
 #
 #   publish-feed.sh <run-id>                                    # a finished build run
-#   publish-feed.sh --dir DIR --channel C --sha SHA [--run ID]  # trees already on disk
+#   publish-feed.sh --dir DIR --channel C --sha SHA [--run ID] [--tag T]  # trees already on disk
 #
 # The first form downloads the run's repo-* artifacts (gh CLI) and takes the
 # channel and commit from the run itself; that is the repair path when a build
@@ -10,15 +10,15 @@
 # workflow's publish job calls with the artifacts it downloaded — one publish
 # path for both.
 #
-# The channel is the branch the run built, main or stable; stable also
-# rewrites the pre-channel mirror <release>/<arch>/. Every
-# <release>/<arch>/packages.adb found is published; a leg that has none keeps
-# its published state (publish-pages.sh guards that too).
+# main publishes from a push to the main branch; stable ONLY from a release
+# tag (YYYY.MM.DD[.N], scripts/release-stable.sh) — a push to the stable branch
+# builds and publishes nothing. stable also rewrites the pre-channel mirror
+# <release>/<arch>/. Every <release>/<arch>/packages.adb found is published; a
+# leg that has none keeps its published state (publish-pages.sh guards that too).
 #
-# Only the newest commit of a branch publishes. If the branch has moved on
-# since the run, its trees are older than what is or will be online, and this
-# refuses (with a warning, exit 0) — a late publish must never roll a channel
-# back.
+# A late publish must never roll a channel back, so this refuses (with a
+# warning, exit 0) when main has moved on since the run, or when the release
+# tag no longer points at the run's commit or a newer release tag exists.
 #
 # Why it exists: a feed build takes hours (14 legs of 50-75 minutes on three
 # runners), the artifacts stay attached to the run for 30 days, and a failed
@@ -34,7 +34,8 @@ root="$(cd "$here/../.." && pwd)"
 die() { echo "publish-feed: $*" >&2; exit 1; }
 
 REPO="${GITHUB_REPOSITORY:-ddimension/openwrt-repo}"
-DIR="" CHANNEL="" SHA="" RUN=""
+RELEASE_TAG_RE='^20[0-9]{2}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$'
+DIR="" CHANNEL="" SHA="" RUN="" TAG=""
 case "${1:-}" in
 --dir)
 	while [ $# -gt 0 ]; do
@@ -44,6 +45,7 @@ case "${1:-}" in
 		--channel) CHANNEL="$2" ;;
 		--sha) SHA="$2" ;;
 		--run) RUN="$2" ;;
+		--tag) TAG="$2" ;;
 		*) die "unknown argument $1" ;;
 		esac
 		shift 2
@@ -59,6 +61,13 @@ case "${1:-}" in
 		die "run $RUN not found in $REPO"
 	read -r name CHANNEL SHA <<<"$info"
 	[ "$name" = build ] || die "run $RUN is a '$name' run, not a feed build"
+	# a tag run's head_branch is the tag: a release, published as stable
+	if printf '%s' "$CHANNEL" | grep -Eq "$RELEASE_TAG_RE"; then
+		TAG="$CHANNEL"
+		CHANNEL=stable
+	elif [ "$CHANNEL" = stable ]; then
+		die "run $RUN built the stable branch, which publishes nothing — release a tag (scripts/release-stable.sh)"
+	fi
 	tmp="$(mktemp -d)"
 	trap 'rm -rf "$tmp"' EXIT
 	gh run download "$RUN" -R "$REPO" -p 'repo-*' -D "$tmp/dl" ||
@@ -72,10 +81,29 @@ main | stable) ;;
 *) die "'$CHANNEL' is not a channel (main or stable)" ;;
 esac
 
-tip="$(git ls-remote "https://github.com/$REPO.git" "refs/heads/$CHANNEL" | cut -f1)"
-if [ -n "$tip" ] && [ "$tip" != "$SHA" ]; then
-	echo "::warning::$CHANNEL is at ${tip:0:12} now; ${SHA:0:12}${RUN:+ (run $RUN)} is older and is not published"
-	exit 0
+remote="https://github.com/$REPO.git"
+if [ "$CHANNEL" = stable ]; then
+	[ -n "$TAG" ] || die "stable publishes only from a release tag (--tag); a stable branch build publishes nothing"
+	printf '%s' "$TAG" | grep -Eq "$RELEASE_TAG_RE" || die "'$TAG' is not a release tag (YYYY.MM.DD[.N])"
+	# the commit behind the tag (an annotated tag lists it as <tag>^{})
+	tagsha="$(git ls-remote --tags "$remote" "refs/tags/$TAG" "refs/tags/$TAG^{}" |
+		awk '{ s[$2] = $1 } END { print (s["refs/tags/'"$TAG"'^{}"] != "" ? s["refs/tags/'"$TAG"'^{}"] : s["refs/tags/'"$TAG"'"]) }')"
+	if [ "$tagsha" != "$SHA" ]; then
+		echo "::warning::release tag $TAG is at ${tagsha:0:12}, not ${SHA:0:12}${RUN:+ (run $RUN)} — not published"
+		exit 0
+	fi
+	latest="$(git ls-remote --tags "$remote" | sed -n 's#.*refs/tags/##p' | grep -v '\^{}$' |
+		grep -E "$RELEASE_TAG_RE" | sort -V | tail -n1)"
+	if [ -n "$latest" ] && [ "$latest" != "$TAG" ]; then
+		echo "::warning::$latest is a newer release than $TAG — not published"
+		exit 0
+	fi
+else
+	tip="$(git ls-remote "$remote" "refs/heads/$CHANNEL" | cut -f1)"
+	if [ -n "$tip" ] && [ "$tip" != "$SHA" ]; then
+		echo "::warning::$CHANNEL is at ${tip:0:12} now; ${SHA:0:12}${RUN:+ (run $RUN)} is older and is not published"
+		exit 0
+	fi
 fi
 
 # …/<release>/<arch>/packages.adb, from the CI layout (DIR/<release>/<arch>)
