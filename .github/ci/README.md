@@ -355,6 +355,14 @@ DTS, LZMA-Loader). Quellen:
   damit ihr warmer Baum nicht wegen eines Config-Wechsels neu baut.
 - Cache: `owrt-src-<slug>-<base>` (Quellbaum **inkl. build_dir/staging** persistent) +
   geteilt `owrt-dl`/`owrt-ccache`. `CONFIG_CCACHE_DIR=/ccache`, `dl`→`/dl`.
+- **Hänger beim Packen, zweiter Versuch mit `-j1`.** Am 2026-10-04 stand der
+  `nr7101 stable`-Leg (Lauf 37194316303) 45 min ohne CPU-Last in **zwei
+  parallelen** `apk mkpkg` unter fakeroot (`pipe_read`, die `faked` in
+  `do_select`) — und zwar **mit** gesetztem `--ulimit nofile`, die fd-Limit-
+  Erklärung von früher deckt also nicht alles ab. `build-images.sh` wertet
+  deshalb rc=124 (Wachhund) anders als einen echten Fehler: einmal aufräumen
+  (`pkill` auf `apk mkpkg`/`faked`) und `make -j1` nachschieben. An der Stelle
+  ist der Baum praktisch fertig, serialisiert kostet das Minuten.
 - **`--ulimit nofile=1024:1048576`** an beiden `docker run` (Voll-Build und
   ImageBuilder): Dockers quasi-unbegrenztes fd-Limit lässt fakeroot/`apk mkpkg`
   in der fd-close-Schleife hängen. Der kalte `nr7101 stable`-Leg (Lauf

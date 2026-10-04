@@ -257,7 +257,28 @@ if [ -d package/kernel/qca-ssdk ] && [ "$TARGET" = qualcommax ]; then
 	run_watched qca-ssdk make -j1 package/kernel/qca-ssdk/compile BUILD_LOG=1
 fi
 
-run_watched world make -j"${JOBS}" BUILD_LOG=1
+# Ein Hänger ist nicht dasselbe wie ein Fehler: rc=124 heisst, der Wachhund hat
+# abgebrochen, weil 45 min nichts passiert ist. Gesehen am 2026-10-04 im
+# nr7101-stable-Leg (Lauf 37194316303): zwei `apk mkpkg` unter fakeroot standen
+# ohne CPU-Last in pipe_read, ihre faked-Prozesse in do_select -- derselbe
+# Abdruck wie beim fd-Limit-Problem, nur hing `--ulimit nofile=1024:1048576`
+# diesmal nachweislich am Container. Es trifft sporadisch zwei PARALLELE
+# mkpkg; serialisiert kam derselbe Baum durch. Also: einmal aufräumen und mit
+# -j1 weitermachen. Der Baum ist an der Stelle praktisch fertig gebaut, es geht
+# nur noch ums Packen -- -j1 kostet dort Minuten, nicht Stunden.
+rc=0
+run_watched world make -j"${JOBS}" BUILD_LOG=1 || rc=$?
+if [ "$rc" = 124 ]; then
+	echo "::warning file=${SLUG:-image}::Stufe 'world' hing (rc=124), einmal serieller Versuch mit -j1"
+	# Reste des abgebrochenen Laufs: der Wachhund killt die make-Kinder, die
+	# fakeroot-Daemons haengen aber an keinem von ihnen.
+	pkill -9 -f 'apk mkpkg' 2>/dev/null || true
+	pkill -9 -x faked 2>/dev/null || true
+	sleep 2
+	rc=0
+	run_watched world-j1 make -j1 BUILD_LOG=1 || rc=$?
+fi
+[ "$rc" = 0 ] || exit "$rc"
 echo "::endgroup::"
 
 # Artefakte einsammeln
