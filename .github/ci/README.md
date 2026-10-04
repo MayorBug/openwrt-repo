@@ -128,6 +128,29 @@ Layout der Site:
   `<UTC-Zeit> <kanal> <quell-commit> <run-id>`. Daraus kommen die Daten in den
   Verzeichnis-Indexen (die mtime wäre für alles, was der Lauf nicht geschrieben
   hat, die Checkout-Zeit), und darauf wartet der zyxel-Leg.
+- **Versionshistorie: die letzten 10 je Paket.** Ein Feed-Ziel wird nicht mehr
+  stumpf ersetzt: vorhandene `.apk` werden beiseitegelegt, der frische Baum
+  kopiert, die alten Versionen zurückgelegt (gleicher Dateiname → der frische
+  gewinnt) und dann auf die neuesten N je Paketname gekürzt —
+  `--keep 'main/*=10' --keep 'stable/*=10'` setzt `publish-feed.sh`
+  (`KEEP_VERSIONS`), der Alt-Pfad behält wie bisher eine. Danach baut
+  `.github/ci/apk-retention.sh` **packages.adb neu und signiert ihn** (das
+  kann `apk mkndx` nur über alle Dateien auf einmal, `-x` hängt nicht an) und
+  erzeugt `index.json` mit upstreams `make-index-json.py` (vendort) sowie
+  `versions.json`/`.versions.tsv` mit Version, Bauzeit (aus dem Paket) und
+  Erst-Veröffentlichung je Datei. Die Verzeichnis-Listings zeigen das statt
+  eines Datums für alles. Scheitert der Schritt, scheitert der Publish —
+  ein Index, der auf fehlende Dateien zeigt, wäre schlimmer als kein Update.
+  **Pakete, die der Build nicht mehr erzeugt, fallen raus** (nach der
+  Aufteilung also apman & Co.): mitgenommen wird nur, wovon der frische Baum
+  mindestens eine Version enthält.
+- **apk im Publish-Job:** die Runner haben kein apk v3, das SDK-apk nur in
+  einem fertigen SDK-Baum. Der Publisher startet deshalb
+  `image-registry.ddimension.net/myadmin/apk-tools` (Alpine + python3,
+  `~/projects/containers/apk-tools`); der Job loggt sich dafür in die Registry
+  ein und bekommt `PRIVATE_KEY` — denselben Schlüssel, mit dem das SDK den
+  frischen Index signiert. Ohne Schlüssel bricht der Publisher ab
+  (`PAGES_ALLOW_UNSIGNED=1` nur für Tests gegen ein Bare-Repo).
 - **Token** nur über env-gescopte git-Config (`GIT_CONFIG_*`), nie in einer
   Clone-URL — die landete früher in `.git/config` im persistenten Workspace. Der
   erste, leere Eintrag leert die Header-Liste: actions/checkout hinterlegt selbst

@@ -87,6 +87,12 @@ release scripts belongs in both repos — say so in the commit message.
 - New package: add it to `.github/ci/packages` (the one list for CI and
   `scripts/local-build.sh`), or say in its README why not (heatingrod,
   pcie_mhi, python3-edlclient).
+- Every published tree keeps the **last 10 versions** of each package so a
+  device can downgrade (`apk add wwand=1.6.9-r1`, which pins it in
+  `/etc/apk/world`; `apk add wwand` unpins). The publisher merges the old
+  `.apk` in, prunes per package and rebuilds the **signed** index in the
+  apk-tools container — so the publish job needs `PRIVATE_KEY` and a registry
+  login. A package the build no longer produces is dropped, history included.
 - gh-pages is written only by `.github/ci/publish-pages.sh`. Never push
   gh-pages by hand, and never re-run a build run from before the channel split
   (2026-09-11): its old publish step deletes `main/` and `stable/`.

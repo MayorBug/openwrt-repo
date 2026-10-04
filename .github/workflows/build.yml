@@ -270,6 +270,17 @@ jobs:
           path: fresh
           merge-multiple: true
 
+      # The publisher keeps the last versions of every package in a tree and
+      # therefore rebuilds and re-signs the index — with apk, which exists
+      # neither here nor on the runner. It runs apk-tools from our registry
+      # (.github/ci/apk-retention.sh); docker.io is deliberately not involved.
+      - name: Login to image registry
+        uses: docker/login-action@v3
+        with:
+          registry: image-registry.ddimension.net
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
       # Replaces exactly <channel>/<release>/<arch> for every leg that built
       # (plus the pre-channel mirror for stable) and nothing else — the other
       # channel and the device images stay as they are. Concurrent publishes
@@ -278,6 +289,10 @@ jobs:
       - name: Publish to gh-pages
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Same key the SDK signs a fresh index with: the publisher rebuilds
+          # the index whenever a tree keeps more than one version per package,
+          # and an unsigned index would be a regression for every device.
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
         # The same script publishes a finished run by hand when only its
         # publish failed (.github/ci/publish-feed.sh <run-id>) — no rebuild.
         # It also refuses when the branch has moved on since this run.

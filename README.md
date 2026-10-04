@@ -54,6 +54,12 @@ https://ddimension.github.io/openwrt-repo/<channel>/<release>/<arch>/
 `ddimension-feed.apk`, the feed's address and key for exactly that tree (see
 [Set up a device](#set-up-a-device)); **tree** is the repository itself, browsable.
 
+Each tree keeps the **last 10 versions** of every package — the index lists them
+all, so a device can go back (see [Go back to an older package
+version](#go-back-to-an-older-package-version)). `versions.json` in the tree
+says per file which version it is, when it was built and when it was first
+published; the pre-channel mirror keeps the newest version only.
+
 | Arch | Covers (among others) | stable · 25.12 | stable · snapshot | main · 25.12 | main · snapshot |
 |---|---|---|---|---|---|
 | `aarch64_cortex-a53` | qualcommax (MikroTik Chateau, ipq807x, ipq60xx), mediatek/filogic | [apk](https://ddimension.github.io/openwrt-repo/stable/openwrt-25.12/aarch64_cortex-a53/ddimension-feed.apk) · [tree](https://ddimension.github.io/openwrt-repo/stable/openwrt-25.12/aarch64_cortex-a53/) | [apk](https://ddimension.github.io/openwrt-repo/stable/snapshot/aarch64_cortex-a53/ddimension-feed.apk) · [tree](https://ddimension.github.io/openwrt-repo/stable/snapshot/aarch64_cortex-a53/) | [apk](https://ddimension.github.io/openwrt-repo/main/openwrt-25.12/aarch64_cortex-a53/ddimension-feed.apk) · [tree](https://ddimension.github.io/openwrt-repo/main/openwrt-25.12/aarch64_cortex-a53/) | [apk](https://ddimension.github.io/openwrt-repo/main/snapshot/aarch64_cortex-a53/ddimension-feed.apk) · [tree](https://ddimension.github.io/openwrt-repo/main/snapshot/aarch64_cortex-a53/) |
@@ -180,6 +186,30 @@ the other tree. Back from `main` to `stable` works the same way with
 plain upgrade keeps the newer versions from main. `--available` acts on the
 whole system — every package is set to what the configured repositories
 offer, including packages from other feeds.
+
+### Go back to an older package version
+
+Every tree keeps the **last 10 versions** of each package, so a bad version can
+be undone on the spot:
+
+```
+apk list wwand                      # what the tree offers
+apk add wwand=1.6.9-r1              # go back to that one
+```
+
+apk reports `Downgrading` and writes the pin `wwand=1.6.9-r1` into
+`/etc/apk/world`; `apk upgrade`, `apk upgrade --available` included, leaves a
+pinned package alone. Lift the pin when the next good version is out:
+
+```
+apk add wwand                       # floating again
+apk upgrade
+```
+
+Which versions a tree has, with their build and publish dates, is in its
+`versions.json` (and in the directory listing). The pre-channel path
+`…/<release>/<arch>/` keeps only the newest — downgrades need `stable/…` or
+`main/…`.
 
 ### Migrate a device set up before the channels
 
