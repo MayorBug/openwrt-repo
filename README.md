@@ -58,6 +58,9 @@ build throws its SDK tree away on every run.
 built by CI: the MHI and NSS driver packages require local builds and hardware
 tests. `python3-edlclient` is built on demand. Build these in a compatible buildroot.
 
+For PCIe modems that use QMI over QRTR, install `kmod-qrtr-mhi` separately
+and set `option device 'qrtr'` in the modem configuration.
+
 ## Binary package repositories
 
 ```
